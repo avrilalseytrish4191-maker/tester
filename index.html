@@ -100,6 +100,31 @@ header{display:flex;align-items:center;gap:12px;padding:14px 2px 10px;flex-shrin
 .typing i:nth-child(2){animation-delay:.2s}.typing i:nth-child(3){animation-delay:.4s}
 @keyframes blink{0%,80%,100%{opacity:.25}40%{opacity:1}}
 
+
+/* blok kode ringkas */
+.codewrap.collapsed pre{max-height:150px;overflow:hidden;position:relative}
+.codewrap.collapsed pre::after{content:"";position:absolute;left:0;right:0;bottom:0;height:60px;
+  background:linear-gradient(transparent,var(--ink));pointer-events:none}
+.expander{display:block;width:100%;background:var(--ink3);border:1px solid var(--line);border-top:none;
+  border-radius:0 0 10px 10px;color:var(--dim);font:11px var(--mono);padding:7px;cursor:pointer;
+  user-select:none;-webkit-user-select:none}
+.expander:hover{color:var(--amber)}
+.codewrap.collapsed pre{border-radius:0!important}
+/* kartu file unduhan */
+.filecards{margin-top:12px;display:flex;flex-direction:column;gap:8px;user-select:none;-webkit-user-select:none}
+.filecard{display:flex;align-items:center;gap:12px;background:var(--ink3);border:1px solid var(--line);
+  border-radius:12px;padding:10px 12px}
+.filecard .fic{width:38px;height:38px;border-radius:9px;background:var(--ink);border:1px solid var(--line);
+  display:flex;align-items:center;justify-content:center;font:13px var(--mono);color:var(--aqua);flex-shrink:0}
+.filecard .fmeta{min-width:0;margin-right:auto}
+.filecard .fname{font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.filecard .ftype{font:10.5px var(--mono);color:var(--dim);letter-spacing:1px;text-transform:uppercase}
+.filecard .fdl{background:var(--ink);border:1px solid var(--line);color:var(--text);border-radius:9px;
+  padding:7px 14px;font-size:12.5px;cursor:pointer;flex-shrink:0}
+.filecard .fdl:hover{border-color:var(--amber)}
+.dlall{align-self:flex-start;background:var(--ink3);border:1px solid var(--line);color:var(--text);
+  border-radius:9px;padding:7px 14px;font-size:12.5px;cursor:pointer;display:inline-flex;gap:6px;align-items:center}
+.dlall:hover{border-color:var(--aqua)}
 /* ===== Composer ===== */
 .composer{flex-shrink:0;padding:10px 0 max(14px,env(safe-area-inset-bottom))}
 .imgpreview{display:none;align-items:center;gap:10px;margin-bottom:8px;font:12px var(--mono);color:var(--dim)}
@@ -414,24 +439,68 @@ function downloadText(t,filename){
   document.body.appendChild(a);a.click();
   setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},800);
 }
-let fileCounter=1;
+let msgCounter=0;
+const FNAME={html:"index",css:"style",js:"script",py:"main",json:"data",jsx:"App",ts:"script",
+  java:"Main",c:"main",cpp:"main",sql:"query",sh:"run",yml:"config",xml:"data",php:"index",txt:"catatan"};
+const FICON={html:"</>",css:"#",js:"JS",py:"PY",json:"{}",jsx:"</>",ts:"TS",java:"J",cpp:"C+",c:"C",
+  sql:"DB",sh:">_",yml:"YML",xml:"<>",php:"PHP",txt:"TXT"};
 function decorate(aiDiv, fullText){
-  // header tiap blok kode: bahasa + salin + unduh
+  msgCounter++;
+  const files=[]; const usedNames={};
+  // 1) header tiap blok kode: bahasa + salin; blok panjang diringkas
   aiDiv.querySelectorAll(".codewrap").forEach(w=>{
     if(w.querySelector(".codehead"))return;
     const lang=(w.dataset.lang||"txt").toLowerCase();
     const ext=EXT[lang]||"txt";
     const code=w.querySelector("code").textContent;
+    // nama file pintar: index.html, style.css, script.js, dst. + nomor jika kembar
+    let base=FNAME[ext]||"file";
+    let fname=base+"."+ext, n=2;
+    while(usedNames[fname]){fname=base+n+"."+ext;n++}
+    usedNames[fname]=1;
+    files.push({name:fname,ext,code});
     const head=document.createElement("div");
     head.className="codehead";
-    head.innerHTML=`<span class="lang">${lang}</span>
-      <button class="tbtn cpy">⧉ Salin</button>
-      <button class="tbtn dl">⬇ Unduh .${ext}</button>`;
+    head.innerHTML=`<span class="lang">${fname}</span><button class="tbtn cpy">⧉ Salin</button>`;
     head.querySelector(".cpy").onclick=e=>copyText(code,e.currentTarget);
-    head.querySelector(".dl").onclick=()=>downloadText(code,`pgbrain-${fileCounter++}.${ext}`);
     w.insertBefore(head,w.firstChild);
+    // ringkas kalau kodenya panjang (>8 baris)
+    const lines=code.split("\n").length;
+    if(lines>8){
+      w.classList.add("collapsed");
+      const ex=document.createElement("button");
+      ex.className="expander";
+      const label=()=>w.classList.contains("collapsed")
+        ?`▾ Tampilkan semua (${lines} baris)`:"▴ Ringkas";
+      ex.textContent=label();
+      ex.onclick=()=>{w.classList.toggle("collapsed");ex.textContent=label()};
+      w.appendChild(ex);
+    }
   });
-  // tombol salin seluruh jawaban
+  // 2) kartu file unduhan di bawah jawaban (seperti Claude/ChatGPT)
+  if(files.length){
+    const fc=document.createElement("div");
+    fc.className="filecards";
+    files.forEach(f=>{
+      const card=document.createElement("div");
+      card.className="filecard";
+      card.innerHTML=`<div class="fic">${FICON[f.ext]||"F"}</div>
+        <div class="fmeta"><div class="fname">${f.name}</div>
+        <div class="ftype">Kode · ${f.ext}</div></div>
+        <button class="fdl">Unduh</button>`;
+      card.querySelector(".fdl").onclick=()=>downloadText(f.code,f.name);
+      fc.appendChild(card);
+    });
+    if(files.length>1){
+      const all=document.createElement("button");
+      all.className="dlall";
+      all.innerHTML=`⬇ Unduh semua (${files.length} file)`;
+      all.onclick=()=>files.forEach((f,i)=>setTimeout(()=>downloadText(f.code,f.name),i*400));
+      fc.appendChild(all);
+    }
+    aiDiv.appendChild(fc);
+  }
+  // 3) tombol salin seluruh jawaban
   const tools=document.createElement("div");
   tools.className="msgtools";
   tools.innerHTML=`<button class="tbtn cpyall">⧉ Salin jawaban</button>`;
