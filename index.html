@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>NEXA · Otak Gemini</title>
+<title>PGBrain · Multi AI</title>
 <style>
 :root{
   --ink:#0b1220;         /* latar utama: biru-tinta dalam */
@@ -43,7 +43,7 @@ body{
 /* ===== Header ===== */
 header{display:flex;align-items:center;gap:12px;padding:14px 2px 10px;flex-shrink:0}
 .logo{display:flex;align-items:baseline;gap:8px}
-.logo b{font-size:20px;letter-spacing:3px}
+.logo b{font-size:19px;letter-spacing:1.5px}
 .logo span{font:11px var(--mono);color:var(--dim);letter-spacing:1px}
 .status{margin-left:auto;display:flex;align-items:center;gap:8px;font:12px var(--mono);color:var(--dim)}
 .dot{width:8px;height:8px;border-radius:50%;background:var(--danger);transition:background .3s}
@@ -74,7 +74,7 @@ header{display:flex;align-items:center;gap:12px;padding:14px 2px 10px;flex-shrin
 /* ===== Chat ===== */
 .chat{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:14px;padding:6px 2px 16px;scroll-behavior:smooth}
 .empty{margin:auto;text-align:center;color:var(--dim)}
-.empty .big{font-size:34px;letter-spacing:6px;background:linear-gradient(90deg,var(--amber),var(--aqua));-webkit-background-clip:text;background-clip:text;color:transparent;font-weight:800}
+.empty .big{font-size:32px;letter-spacing:3px;background:linear-gradient(90deg,var(--amber),var(--aqua));-webkit-background-clip:text;background-clip:text;color:transparent;font-weight:800}
 .empty p{font-size:13px;margin-top:6px}
 .msg{max-width:86%;border-radius:var(--r);padding:12px 15px;font-size:14.5px;white-space:pre-wrap;word-wrap:break-word}
 .msg.user{align-self:flex-end;background:var(--ink3);border:1px solid var(--line);border-bottom-right-radius:4px}
@@ -104,27 +104,56 @@ textarea:focus{outline:none}
 .send{background:linear-gradient(120deg,var(--amber),#ff9a3d);color:#241505;border:none;width:40px;height:40px;border-radius:12px;font-size:17px;cursor:pointer;flex-shrink:0}
 .send:disabled{opacity:.4;cursor:default}
 .hint{text-align:center;font:11px var(--mono);color:var(--dim);margin-top:8px}
+
+/* ===== Layar Login ===== */
+.lock{position:fixed;inset:0;z-index:50;background:var(--ink);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:0}
+.lock .aurora2{position:absolute;inset:-30% -10% auto -10%;height:55vh;pointer-events:none;
+  background:radial-gradient(40% 60% at 30% 40%, rgba(255,180,84,.14), transparent 70%),
+  radial-gradient(35% 55% at 70% 30%, rgba(95,212,196,.12), transparent 70%);filter:blur(30px)}
+.lockcard{position:relative;background:var(--ink2);border:1px solid var(--line);border-radius:18px;padding:28px 26px;width:min(340px,90vw)}
+.lockcard .big{font-size:26px;letter-spacing:3px;font-weight:800;text-align:center;
+  background:linear-gradient(90deg,var(--amber),var(--aqua));-webkit-background-clip:text;background-clip:text;color:transparent}
+.lockcard p{text-align:center;font:12px var(--mono);color:var(--dim);margin:4px 0 18px}
+.lockcard input{width:100%;background:var(--ink);border:1px solid var(--line);border-radius:10px;padding:11px 13px;color:var(--text);font-size:14px;margin-bottom:10px}
+.lockcard input:focus{outline:2px solid var(--amber);outline-offset:-1px}
+.lockcard .btn{width:100%;padding:12px}
+.lockerr{color:var(--danger);font-size:12px;text-align:center;min-height:16px;margin-top:8px}
 </style>
 </head>
 <body>
 <div class="aurora"></div>
+<div class="lock" id="lock">
+  <div class="aurora2"></div>
+  <div class="lockcard">
+    <div class="big">PGBrain</div>
+    <p>masuk untuk melanjutkan</p>
+    <input type="text" id="loginUser" placeholder="User ID" autocomplete="off">
+    <input type="password" id="loginPass" placeholder="Password">
+    <button class="btn" id="loginBtn">Masuk</button>
+    <div class="lockerr" id="lockerr"></div>
+  </div>
+</div>
+
 <div class="app">
   <header>
-    <div class="logo"><b>NEXA</b><span>gemini core</span></div>
+    <div class="logo"><b>PGBrain</b><span>multi ai core</span></div>
     <div class="status"><span class="dot" id="dot"></span><span id="modelLabel">offline</span></div>
     <button class="gear" id="gearBtn">⚙ Kunci</button>
   </header>
 
   <div class="keypanel" id="keypanel">
-    <h3>Hubungkan otak Gemini</h3>
-    <p>Ambil API key gratis di <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a>, lalu tempel di sini. Aplikasi ini bicara langsung ke server Google — tanpa perantara, jadi kecepatannya sama dengan Gemini asli.</p>
-    <div class="keyrow">
-      <input type="password" id="apikey" placeholder="AIza..." autocomplete="off">
-      <select id="model">
-        <option value="gemini-2.5-flash">Gemini 2.5 Flash · tercepat</option>
-        <option value="gemini-2.5-pro">Gemini 2.5 Pro · terpintar</option>
-        <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+    <h3>Hubungkan otak AI</h3>
+    <p id="provhint">Pilih penyedia, ambil API key gratis (tanpa kartu kredit), tempel, lalu hubungkan.</p>
+    <div class="keyrow" style="margin-bottom:8px">
+      <select id="provider" style="flex:1">
+        <option value="gemini">Google Gemini · aistudio.google.com/apikey</option>
+        <option value="openrouter">OpenRouter · openrouter.ai/keys (ada Gemini gratis)</option>
+        <option value="groq">Groq · console.groq.com/keys (paling ngebut)</option>
       </select>
+    </div>
+    <div class="keyrow">
+      <input type="password" id="apikey" placeholder="Tempel API key di sini..." autocomplete="off">
+      <select id="model"></select>
       <button class="btn" id="connectBtn">Hubungkan</button>
     </div>
     <div class="note">Kunci hanya disimpan di memori halaman ini dan hilang saat halaman ditutup — tidak dikirim ke mana pun selain Google.</div>
@@ -141,7 +170,7 @@ textarea:focus{outline:none}
 
   <div class="chat" id="chat">
     <div class="empty" id="empty">
-      <div class="big">NEXA</div>
+      <div class="big">PGBrain</div>
       <p>Hubungkan kunci API, pilih mode, dan mulai.<br>Unggah gambar dengan tombol 📎 untuk dianalisis dan diberi saran perbaikan.</p>
     </div>
   </div>
@@ -161,18 +190,97 @@ textarea:focus{outline:none}
 <script>
 "use strict";
 const $=id=>document.getElementById(id);
-let API_KEY="", MODEL="gemini-2.5-flash", MODE="chat";
-let history=[];            // riwayat percakapan format Gemini
-let pendingImage=null;     // {mime, b64, name}
+
+/* ================= KONFIGURASI PEMILIK =================
+   BUILTIN_KEY diisi otomatis oleh GitHub Actions dari Secrets.
+   Kalau kosong, aplikasi berjalan seperti biasa (minta key manual).
+   USERS: daftar akun yang boleh masuk. Password disimpan sebagai
+   hash SHA-256 (bukan teks asli) supaya tidak terbaca langsung.   */
+const CONFIG={
+  BUILTIN_KEY:"__NEXA_API_KEY__",
+  BUILTIN_PROVIDER:"__NEXA_PROVIDER__",   // gemini | openrouter | groq
+  BUILTIN_MODEL:"__NEXA_MODEL__",
+  USERS:[
+    // user: admin  |  password: nexa2026  (GANTI! lihat README)
+    {u:"admin",h:"301c88828f0484451e067311ea897604b50ea8f1775fa78246eebc178f7cd677"}
+  ]
+};
+/* ======================================================= */
+
+// SHA-256 murni JS (jalan di file:// tanpa perlu https)
+function sha256(ascii){function rr(v,a){return(v>>>a)|(v<<(32-a))}var mL=ascii.length*8,r="",words=[],aB,i,j,h=[],k=[],pC=0,isC={},c=2;for(;pC<64;c++){if(!isC[c]){for(i=0;i<313;i+=c)isC[i]=c;h[pC]=(Math.pow(c,.5)*4294967296)|0;k[pC++]=(Math.pow(c,1/3)*4294967296)|0}}ascii+="\x80";while(ascii.length%64-56)ascii+="\x00";for(i=0;i<ascii.length;i++){j=ascii.charCodeAt(i);if(j>>8)return"";words[i>>2]|=j<<((3-i)%4)*8}words[words.length]=(mL/4294967296)|0;words[words.length]=mL;for(j=0;j<words.length;){var w=words.slice(j,j+=16),oH=h;h=h.slice(0,8);for(i=0;i<64;i++){var w15=w[i-15],w2=w[i-2],a=h[0],e=h[4],t1=h[7]+(rr(e,6)^rr(e,11)^rr(e,25))+((e&h[5])^(~e&h[6]))+k[i]+(w[i]=(i<16)?w[i]:(w[i-16]+(rr(w15,7)^rr(w15,18)^(w15>>>3))+w[i-7]+(rr(w2,17)^rr(w2,19)^(w2>>>10)))|0),t2=(rr(a,2)^rr(a,13)^rr(a,22))+((a&h[1])^(a&h[2])^(h[1]&h[2]));h=[(t1+t2)|0].concat(h);h[4]=(h[4]+t1)|0}for(i=0;i<8;i++)h[i]=(h[i]+oH[i])|0}for(i=0;i<8;i++)for(j=3;j+1;j--){var b=(h[i]>>(j*8))&255;r+=((b>>4).toString(16))+((b&15).toString(16))}return r}
+
+const hasBuiltin = CONFIG.BUILTIN_KEY && !CONFIG.BUILTIN_KEY.startsWith("__");
+
+let API_KEY="", MODEL="", PROVIDER="gemini", MODE="chat";
+let history=[];            // riwayat netral: {role:"user"|"model", text, img:{mime,b64}|null}
+let pendingImage=null;
 let busy=false;
 
+const PROVIDERS={
+  gemini:{
+    label:"Gemini",
+    keyUrl:"https://aistudio.google.com/apikey",
+    groups:[
+      ["GRATIS",[
+        ["gemini-2.5-flash","Gemini 2.5 Flash — serbaguna & cepat, terbaik untuk chat harian"],
+        ["gemini-2.5-flash-lite","Gemini 2.5 Flash-Lite — paling hemat kuota, tanya-jawab ringan"]
+      ]],
+      ["BERBAYAR",[
+        ["gemini-2.5-pro","Gemini 2.5 Pro 💰 — terbaik untuk penalaran rumit, riset & analisis gambar"]
+      ]]
+    ]
+  },
+  openrouter:{
+    label:"OpenRouter",
+    keyUrl:"https://openrouter.ai/keys",
+    groups:[
+      ["GRATIS",[
+        ["google/gemini-2.0-flash-exp:free","Gemini Flash — otak Gemini, serbaguna & bisa gambar"],
+        ["deepseek/deepseek-chat-v3-0324:free","DeepSeek V3 — terbaik untuk koding & matematika"],
+        ["meta-llama/llama-3.3-70b-instruct:free","Llama 3.3 70B — terbaik untuk ngobrol natural"]
+      ]],
+      ["BERBAYAR (perlu isi saldo)",[
+        ["anthropic/claude-sonnet-4.5","Claude Sonnet 4.5 💰 — terbaik untuk koding & tulisan berkualitas"],
+        ["openai/gpt-4o","GPT-4o 💰 — serbaguna premium, kuat di gambar & percakapan"],
+        ["google/gemini-2.5-pro","Gemini 2.5 Pro 💰 — penalaran dalam & konteks super panjang"],
+        ["deepseek/deepseek-r1","DeepSeek R1 💰 — penalaran langkah-demi-langkah, murah"]
+      ]]
+    ]
+  },
+  groq:{
+    label:"Groq",
+    keyUrl:"https://console.groq.com/keys",
+    groups:[
+      ["GRATIS",[
+        ["llama-3.3-70b-versatile","Llama 3.3 70B — respon paling ngebut, chat & tulisan"],
+        ["meta-llama/llama-4-scout-17b-16e-instruct","Llama 4 Scout — terbaik untuk analisis gambar (gratis)"]
+      ]],
+      ["BERBAYAR (perlu isi saldo)",[
+        ["meta-llama/llama-4-maverick-17b-128e-instruct","Llama 4 Maverick 💰 — versi lebih pintar, tetap ngebut"],
+        ["deepseek-r1-distill-llama-70b","DeepSeek R1 Distill 💰 — penalaran cepat & murah"]
+      ]]
+    ]
+  }
+};
+
+function fillModels(){
+  const p=PROVIDERS[PROVIDER];
+  $("model").innerHTML=p.groups.map(g=>
+    `<optgroup label="${g[0]}">`+g[1].map(m=>`<option value="${m[0]}">${m[1]}</option>`).join("")+`</optgroup>`
+  ).join("");
+  $("provhint").innerHTML=`Ambil API key gratis di <a href="${p.keyUrl}" target="_blank" rel="noopener">${p.keyUrl.replace("https://","")}</a> (tanpa kartu kredit), tempel di bawah, lalu hubungkan. Model bertanda 💰 hanya jalan kalau akunmu punya saldo/billing.`;
+}
+$("provider").onchange=e=>{PROVIDER=e.target.value;fillModels()};
+fillModels();
+
 const SYSTEMS={
-  chat:"Kamu adalah NEXA, asisten cerdas berbahasa Indonesia yang santai, jelas, dan to the point. Jawab dalam bahasa yang dipakai pengguna.",
-  think:"Kamu adalah NEXA mode Berpikir Dalam. Untuk setiap pertanyaan, uraikan penalaranmu langkah demi langkah secara terstruktur, pertimbangkan beberapa sudut pandang, lalu berikan kesimpulan yang tegas di akhir.",
-  innovate:"Kamu adalah NEXA mode Inovasi. Tugasmu menghasilkan ide-ide segar, tidak biasa, dan bisa dieksekusi. Berikan minimal 3 ide dengan penjelasan singkat cara mewujudkannya, urutkan dari yang paling berani.",
-  image:"Kamu adalah NEXA mode Analisis Gambar. Saat pengguna mengunggah gambar: (1) deskripsikan isinya secara detail, (2) nilai kualitas teknisnya (komposisi, cahaya, warna, ketajaman), (3) berikan saran konkret langkah demi langkah untuk memperbagusnya, termasuk setelan edit spesifik (exposure, kontras, saturasi, crop) yang bisa langsung dipraktikkan.",
-  code:"Kamu adalah NEXA mode Kode. Tulis kode yang bersih, modern, dan langsung jalan. Jelaskan singkat, utamakan kode. Gunakan blok kode markdown.",
-  write:"Kamu adalah NEXA mode Penulis. Bantu menulis, menyunting, dan memperbagus teks dalam bahasa Indonesia yang mengalir dan enak dibaca. Sesuaikan gaya dengan permintaan."
+  chat:"Kamu adalah PGBrain, asisten cerdas berbahasa Indonesia yang santai, jelas, dan to the point. Jawab dalam bahasa yang dipakai pengguna.",
+  think:"Kamu adalah PGBrain mode Berpikir Dalam. Untuk setiap pertanyaan, uraikan penalaranmu langkah demi langkah secara terstruktur, pertimbangkan beberapa sudut pandang, lalu berikan kesimpulan yang tegas di akhir.",
+  innovate:"Kamu adalah PGBrain mode Inovasi. Tugasmu menghasilkan ide-ide segar, tidak biasa, dan bisa dieksekusi. Berikan minimal 3 ide dengan penjelasan singkat cara mewujudkannya, urutkan dari yang paling berani.",
+  image:"Kamu adalah PGBrain mode Analisis Gambar. Saat pengguna mengunggah gambar: (1) deskripsikan isinya secara detail, (2) nilai kualitas teknisnya (komposisi, cahaya, warna, ketajaman), (3) berikan saran konkret langkah demi langkah untuk memperbagusnya, termasuk setelan edit spesifik (exposure, kontras, saturasi, crop) yang bisa langsung dipraktikkan.",
+  code:"Kamu adalah PGBrain mode Kode. Tulis kode yang bersih, modern, dan langsung jalan. Jelaskan singkat, utamakan kode. Gunakan blok kode markdown.",
+  write:"Kamu adalah PGBrain mode Penulis. Bantu menulis, menyunting, dan memperbagus teks dalam bahasa Indonesia yang mengalir dan enak dibaca. Sesuaikan gaya dengan permintaan."
 };
 
 /* ---- koneksi ---- */
@@ -181,20 +289,21 @@ $("connectBtn").onclick=()=>{
   if(!k){$("apikey").focus();return}
   API_KEY=k; MODEL=$("model").value;
   $("dot").classList.add("on");
-  $("modelLabel").textContent=MODEL.replace("gemini-","");
+  $("modelLabel").textContent=PROVIDERS[PROVIDER].label+" · "+MODEL.split("/").pop().replace(":free","").replace("gemini-","");
   $("keypanel").classList.add("hide");
   $("send").disabled=false;
   $("input").focus();
 };
 $("gearBtn").onclick=()=>$("keypanel").classList.toggle("hide");
-$("model").onchange=e=>{if(API_KEY){MODEL=e.target.value;$("modelLabel").textContent=MODEL.replace("gemini-","")}};
+$("model").onchange=e=>{if(API_KEY){MODEL=e.target.value;
+  $("modelLabel").textContent=PROVIDERS[PROVIDER].label+" · "+MODEL.split("/").pop().replace(":free","").replace("gemini-","")}};
 
 /* ---- mode ---- */
 $("modes").addEventListener("click",e=>{
   const c=e.target.closest(".chip"); if(!c)return;
   document.querySelectorAll(".chip").forEach(x=>x.classList.remove("active"));
   c.classList.add("active"); MODE=c.dataset.mode;
-  history=[]; // konteks baru per mode agar fokus
+  history=[];
   $("input").placeholder={
     chat:"Tulis apa saja…",think:"Ajukan masalah yang rumit…",
     innovate:"Mau inovasi soal apa?",image:"Unggah gambar lalu tanyakan…",
@@ -228,7 +337,7 @@ $("send").onclick=sendMsg;
 
 /* ---- render ---- */
 function esc(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
-function md(s){ // markdown super-ringan
+function md(s){
   s=esc(s);
   s=s.replace(/```(\w*)\n([\s\S]*?)```/g,(_,l,c)=>`<pre><code>${c}</code></pre>`);
   s=s.replace(/`([^`\n]+)`/g,"<code>$1</code>");
@@ -236,18 +345,46 @@ function md(s){ // markdown super-ringan
   s=s.replace(/^\s*[\*\-]\s+(.+)$/gm,"• $1");
   return s;
 }
+function tagHtml(){return `<span class="tag">PGBrain · ${PROVIDERS[PROVIDER].label}</span>`}
 function addMsg(role,html,imgUrl){
   $("empty")&&$("empty").remove();
   const d=document.createElement("div");
   d.className="msg "+role;
-  d.innerHTML=(role==="ai"?`<span class="tag">NEXA · ${MODEL.replace("gemini-","")}</span>`:"")
-    +(imgUrl?`<img src="${imgUrl}" alt="">`:"")+html;
+  d.innerHTML=(role==="ai"?tagHtml():"")+(imgUrl?`<img src="${imgUrl}" alt="">`:"")+html;
   $("chat").appendChild(d);
   $("chat").scrollTop=$("chat").scrollHeight;
   return d;
 }
 
-/* ---- kirim ke Gemini (streaming) ---- */
+/* ---- format permintaan per penyedia ---- */
+function buildGeminiBody(){
+  const contents=history.map(m=>{
+    const parts=[];
+    if(m.img)parts.push({inline_data:{mime_type:m.img.mime,data:m.img.b64}});
+    if(m.text)parts.push({text:m.text});
+    return {role:m.role==="model"?"model":"user",parts};
+  });
+  return {
+    system_instruction:{parts:[{text:SYSTEMS[MODE]}]},
+    contents,
+    generationConfig:{temperature:MODE==="innovate"?1.1:0.8}
+  };
+}
+function buildOpenAIBody(){
+  const msgs=[{role:"system",content:SYSTEMS[MODE]}];
+  for(const m of history){
+    if(m.role==="model"){msgs.push({role:"assistant",content:m.text});continue}
+    if(m.img){
+      msgs.push({role:"user",content:[
+        {type:"image_url",image_url:{url:`data:${m.img.mime};base64,${m.img.b64}`}},
+        {type:"text",text:m.text}
+      ]});
+    }else msgs.push({role:"user",content:m.text});
+  }
+  return {model:MODEL,messages:msgs,stream:true,temperature:MODE==="innovate"?1.1:0.8};
+}
+
+/* ---- kirim (streaming, semua penyedia) ---- */
 async function sendMsg(){
   if(busy||!API_KEY)return;
   const text=ta.value.trim();
@@ -255,31 +392,35 @@ async function sendMsg(){
   busy=true;$("send").disabled=true;
   ta.value="";ta.style.height="auto";
 
-  const parts=[];
   const img=pendingImage;
-  if(img)parts.push({inline_data:{mime_type:img.mime,data:img.b64}});
-  parts.push({text:text||"Analisis gambar ini dan beri saran perbaikannya."});
   pendingImage=null;$("imgpreview").style.display="none";
+  const userText=text||"Analisis gambar ini dan beri saran perbaikannya.";
 
   addMsg("user",esc(text||"(gambar)"),img?img.url:null);
-  history.push({role:"user",parts});
+  history.push({role:"user",text:userText,img:img?{mime:img.mime,b64:img.b64}:null});
 
   const aiDiv=addMsg("ai",`<span class="typing"><i></i><i></i><i></i></span>`);
   let full="";
+  const paint=()=>{aiDiv.innerHTML=tagHtml()+md(full);$("chat").scrollTop=$("chat").scrollHeight};
 
   try{
-    const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:streamGenerateContent?alt=sse&key=${API_KEY}`,{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({
-        system_instruction:{parts:[{text:SYSTEMS[MODE]}]},
-        contents:history,
-        generationConfig:{temperature:MODE==="innovate"?1.1:0.8}
-      })
-    });
+    let url,headers,body;
+    if(PROVIDER==="gemini"){
+      url=`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:streamGenerateContent?alt=sse&key=${API_KEY}`;
+      headers={"Content-Type":"application/json"};
+      body=buildGeminiBody();
+    }else{
+      url=PROVIDER==="openrouter"
+        ?"https://openrouter.ai/api/v1/chat/completions"
+        :"https://api.groq.com/openai/v1/chat/completions";
+      headers={"Content-Type":"application/json","Authorization":"Bearer "+API_KEY};
+      body=buildOpenAIBody();
+    }
+
+    const res=await fetch(url,{method:"POST",headers,body:JSON.stringify(body)});
     if(!res.ok){
       const err=await res.json().catch(()=>({}));
-      throw new Error(err.error?.message||`HTTP ${res.status}`);
+      throw new Error(err.error?.message||err.error?.metadata?.raw||`HTTP ${res.status}`);
     }
     const reader=res.body.getReader();
     const dec=new TextDecoder();
@@ -291,25 +432,52 @@ async function sendMsg(){
       const lines=buf.split("\n"); buf=lines.pop();
       for(const line of lines){
         if(!line.startsWith("data: "))continue;
+        const payload=line.slice(6).trim();
+        if(payload==="[DONE]")continue;
         try{
-          const j=JSON.parse(line.slice(6));
-          const t=j.candidates?.[0]?.content?.parts?.map(p=>p.text||"").join("")||"";
-          if(t){full+=t;
-            aiDiv.innerHTML=`<span class="tag">NEXA · ${MODEL.replace("gemini-","")}</span>`+md(full);
-            $("chat").scrollTop=$("chat").scrollHeight;
-          }
+          const j=JSON.parse(payload);
+          let t="";
+          if(PROVIDER==="gemini")
+            t=j.candidates?.[0]?.content?.parts?.map(p=>p.text||"").join("")||"";
+          else
+            t=j.choices?.[0]?.delta?.content||"";
+          if(t){full+=t;paint()}
         }catch(_){}
       }
     }
-    if(!full){aiDiv.classList.add("err");aiDiv.innerHTML="Tidak ada respons. Permintaan mungkin ditolak oleh kebijakan keamanan Gemini — coba ubah kalimatnya."}
-    else history.push({role:"model",parts:[{text:full}]});
+    if(!full){aiDiv.classList.add("err");aiDiv.innerHTML="Tidak ada respons. Permintaan mungkin ditolak kebijakan keamanan penyedia — coba ubah kalimatnya, atau ganti model di panel ⚙."}
+    else history.push({role:"model",text:full,img:null});
   }catch(e){
     aiDiv.classList.add("err");
-    aiDiv.innerHTML="⚠ "+esc(e.message)+"<br><small>Periksa API key, kuota, atau koneksi internet.</small>";
+    aiDiv.innerHTML="⚠ "+esc(e.message)+"<br><small>Periksa API key, kuota harian, atau koneksi internet. Coba juga ganti model/penyedia di panel ⚙.</small>";
     history.pop();
   }
   busy=false;$("send").disabled=false;ta.focus();
 }
+
+/* ---- login ---- */
+function tryLogin(){
+  const u=$("loginUser").value.trim(), p=$("loginPass").value;
+  const ok=CONFIG.USERS.some(x=>x.u===u && x.h===sha256(p));
+  if(!ok){$("lockerr").textContent="User ID atau password salah";$("loginPass").value="";return}
+  $("lock").style.display="none";
+  if(hasBuiltin){
+    API_KEY=CONFIG.BUILTIN_KEY;
+    PROVIDER=(CONFIG.BUILTIN_PROVIDER.startsWith("__"))?"gemini":CONFIG.BUILTIN_PROVIDER;
+    $("provider").value=PROVIDER; fillModels();
+    MODEL=(CONFIG.BUILTIN_MODEL.startsWith("__"))?PROVIDERS[PROVIDER].groups[0][1][0][0]:CONFIG.BUILTIN_MODEL;
+    $("model").value=MODEL;
+    $("apikey").value=API_KEY;
+    $("dot").classList.add("on");
+    $("modelLabel").textContent=PROVIDERS[PROVIDER].label+" · "+MODEL.split("/").pop().replace(":free","").replace("gemini-","");
+    $("keypanel").classList.add("hide");
+    $("send").disabled=false;
+  }
+  $("input").focus();
+}
+$("loginBtn").onclick=tryLogin;
+$("loginPass").addEventListener("keydown",e=>{if(e.key==="Enter")tryLogin()});
+$("loginUser").focus();
 </script>
 </body>
 </html>
