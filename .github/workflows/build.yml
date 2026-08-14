@@ -24,17 +24,21 @@ jobs:
       - name: Suntik API key dari Secrets
         shell: pwsh
         env:
-          NEXA_API_KEY: ${{ secrets.NEXA_API_KEY }}
+          KEY_GEMINI: ${{ secrets.KEY_GEMINI }}
+          KEY_OPENROUTER: ${{ secrets.KEY_OPENROUTER }}
+          KEY_GROQ: ${{ secrets.KEY_GROQ }}
           NEXA_PROVIDER: ${{ secrets.NEXA_PROVIDER }}
           NEXA_MODEL: ${{ secrets.NEXA_MODEL }}
         run: |
           $html = Get-Content index.html -Raw
-          if ($env:NEXA_API_KEY) { $html = $html.Replace('__NEXA_API_KEY__', $env:NEXA_API_KEY) }
-          if ($env:NEXA_PROVIDER) { $html = $html.Replace('__NEXA_PROVIDER__', $env:NEXA_PROVIDER) }
-          if ($env:NEXA_MODEL) { $html = $html.Replace('__NEXA_MODEL__', $env:NEXA_MODEL) }
+          if ($env:KEY_GEMINI)     { $html = $html.Replace('__KEY_GEMINI__', $env:KEY_GEMINI) }
+          if ($env:KEY_OPENROUTER) { $html = $html.Replace('__KEY_OPENROUTER__', $env:KEY_OPENROUTER) }
+          if ($env:KEY_GROQ)       { $html = $html.Replace('__KEY_GROQ__', $env:KEY_GROQ) }
+          if ($env:NEXA_PROVIDER)  { $html = $html.Replace('__NEXA_PROVIDER__', $env:NEXA_PROVIDER) }
+          if ($env:NEXA_MODEL)     { $html = $html.Replace('__NEXA_MODEL__', $env:NEXA_MODEL) }
           Set-Content index.html -Value $html -NoNewline
 
-      - name: Build NEXA.exe
+      - name: Build PGBrain.exe
         run: >
           pyinstaller --onefile --noconsole --name PGBrain
           --add-data "index.html;."
