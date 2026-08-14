@@ -9,6 +9,8 @@ def resource_path(name):
     return os.path.join(base, name)
 
 if __name__ == "__main__":
+    # Izinkan unduh file (untuk tombol "Unduh" pada blok kode)
+    webview.settings["ALLOW_DOWNLOADS"] = True
     html_file = resource_path("index.html")
     webview.create_window(
         "PGBrain — Multi AI",
@@ -17,5 +19,6 @@ if __name__ == "__main__":
         height=720,
         min_size=(420, 560),
         background_color="#0b1220",
+        text_select=True,   # izinkan blok/drag/salin teks
     )
     webview.start()
