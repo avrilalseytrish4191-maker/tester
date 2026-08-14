@@ -197,11 +197,18 @@ const $=id=>document.getElementById(id);
    USERS: daftar akun yang boleh masuk. Password disimpan sebagai
    hash SHA-256 (bukan teks asli) supaya tidak terbaca langsung.   */
 const CONFIG={
-  BUILTIN_KEY:"__NEXA_API_KEY__",
-  BUILTIN_PROVIDER:"__NEXA_PROVIDER__",   // gemini | openrouter | groq
-  BUILTIN_MODEL:"__NEXA_MODEL__",
+  // Satu key per penyedia — isi yang kamu punya lewat GitHub Secrets.
+  // Yang kosong otomatis dilewati; penyedia pertama yang punya key
+  // dipakai saat aplikasi dibuka.
+  KEYS:{
+    gemini:"__KEY_GEMINI__",
+    openrouter:"__KEY_OPENROUTER__",
+    groq:"__KEY_GROQ__"
+  },
+  DEFAULT_PROVIDER:"__NEXA_PROVIDER__",   // opsional: gemini | openrouter | groq
+  DEFAULT_MODEL:"__NEXA_MODEL__",         // opsional
   USERS:[
-    // user: admin  |  password: nexa2026  (GANTI! lihat README)
+    // user: admin  |  password: Bonuscairterus@508  (GANTI! lihat README)
     {u:"admin",h:"301c88828f0484451e067311ea897604b50ea8f1775fa78246eebc178f7cd677"}
   ]
 };
@@ -210,7 +217,8 @@ const CONFIG={
 // SHA-256 murni JS (jalan di file:// tanpa perlu https)
 function sha256(ascii){function rr(v,a){return(v>>>a)|(v<<(32-a))}var mL=ascii.length*8,r="",words=[],aB,i,j,h=[],k=[],pC=0,isC={},c=2;for(;pC<64;c++){if(!isC[c]){for(i=0;i<313;i+=c)isC[i]=c;h[pC]=(Math.pow(c,.5)*4294967296)|0;k[pC++]=(Math.pow(c,1/3)*4294967296)|0}}ascii+="\x80";while(ascii.length%64-56)ascii+="\x00";for(i=0;i<ascii.length;i++){j=ascii.charCodeAt(i);if(j>>8)return"";words[i>>2]|=j<<((3-i)%4)*8}words[words.length]=(mL/4294967296)|0;words[words.length]=mL;for(j=0;j<words.length;){var w=words.slice(j,j+=16),oH=h;h=h.slice(0,8);for(i=0;i<64;i++){var w15=w[i-15],w2=w[i-2],a=h[0],e=h[4],t1=h[7]+(rr(e,6)^rr(e,11)^rr(e,25))+((e&h[5])^(~e&h[6]))+k[i]+(w[i]=(i<16)?w[i]:(w[i-16]+(rr(w15,7)^rr(w15,18)^(w15>>>3))+w[i-7]+(rr(w2,17)^rr(w2,19)^(w2>>>10)))|0),t2=(rr(a,2)^rr(a,13)^rr(a,22))+((a&h[1])^(a&h[2])^(h[1]&h[2]));h=[(t1+t2)|0].concat(h);h[4]=(h[4]+t1)|0}for(i=0;i<8;i++)h[i]=(h[i]+oH[i])|0}for(i=0;i<8;i++)for(j=3;j+1;j--){var b=(h[i]>>(j*8))&255;r+=((b>>4).toString(16))+((b&15).toString(16))}return r}
 
-const hasBuiltin = CONFIG.BUILTIN_KEY && !CONFIG.BUILTIN_KEY.startsWith("__");
+function builtinKey(p){const k=CONFIG.KEYS[p];return (k && !k.startsWith("__"))?k:""}
+const hasBuiltin = ["gemini","openrouter","groq"].some(p=>builtinKey(p));
 
 let API_KEY="", MODEL="", PROVIDER="gemini", MODE="chat";
 let history=[];            // riwayat netral: {role:"user"|"model", text, img:{mime,b64}|null}
@@ -271,7 +279,13 @@ function fillModels(){
   ).join("");
   $("provhint").innerHTML=`Ambil API key gratis di <a href="${p.keyUrl}" target="_blank" rel="noopener">${p.keyUrl.replace("https://","")}</a> (tanpa kartu kredit), tempel di bawah, lalu hubungkan. Model bertanda 💰 hanya jalan kalau akunmu punya saldo/billing.`;
 }
-$("provider").onchange=e=>{PROVIDER=e.target.value;fillModels()};
+$("provider").onchange=e=>{
+  const p=e.target.value;
+  if(builtinKey(p)) activateProvider(p,null);
+  else {PROVIDER=p;fillModels();$("apikey").value="";API_KEY="";
+    $("dot").classList.remove("on");$("modelLabel").textContent="butuh key";
+    $("send").disabled=true;}
+};
 fillModels();
 
 const SYSTEMS={
@@ -455,6 +469,26 @@ async function sendMsg(){
   busy=false;$("send").disabled=false;ta.focus();
 }
 
+
+/* ---- aktifkan penyedia dengan key tertanam yang cocok ---- */
+function activateProvider(p, model){
+  PROVIDER=p; $("provider").value=p; fillModels();
+  API_KEY=builtinKey(p)||$("apikey").value.trim();
+  MODEL=model||PROVIDERS[p].groups[0][1][0][0];
+  $("model").value=MODEL;
+  $("apikey").value=API_KEY;
+  if(API_KEY){
+    $("dot").classList.add("on");
+    $("modelLabel").textContent=PROVIDERS[p].label+" · "+MODEL.split("/").pop().replace(":free","").replace("gemini-","");
+    $("keypanel").classList.add("hide");
+    $("send").disabled=false;
+  }else{
+    $("dot").classList.remove("on");
+    $("modelLabel").textContent="butuh key";
+    $("keypanel").classList.remove("hide");
+    $("send").disabled=true;
+  }
+}
 /* ---- login ---- */
 function tryLogin(){
   const u=$("loginUser").value.trim(), p=$("loginPass").value;
@@ -462,16 +496,10 @@ function tryLogin(){
   if(!ok){$("lockerr").textContent="User ID atau password salah";$("loginPass").value="";return}
   $("lock").style.display="none";
   if(hasBuiltin){
-    API_KEY=CONFIG.BUILTIN_KEY;
-    PROVIDER=(CONFIG.BUILTIN_PROVIDER.startsWith("__"))?"gemini":CONFIG.BUILTIN_PROVIDER;
-    $("provider").value=PROVIDER; fillModels();
-    MODEL=(CONFIG.BUILTIN_MODEL.startsWith("__"))?PROVIDERS[PROVIDER].groups[0][1][0][0]:CONFIG.BUILTIN_MODEL;
-    $("model").value=MODEL;
-    $("apikey").value=API_KEY;
-    $("dot").classList.add("on");
-    $("modelLabel").textContent=PROVIDERS[PROVIDER].label+" · "+MODEL.split("/").pop().replace(":free","").replace("gemini-","");
-    $("keypanel").classList.add("hide");
-    $("send").disabled=false;
+    let p=CONFIG.DEFAULT_PROVIDER;
+    if(p.startsWith("__")||!builtinKey(p))
+      p=["openrouter","gemini","groq"].find(x=>builtinKey(x));
+    activateProvider(p, CONFIG.DEFAULT_MODEL.startsWith("__")?null:CONFIG.DEFAULT_MODEL);
   }
   $("input").focus();
 }
