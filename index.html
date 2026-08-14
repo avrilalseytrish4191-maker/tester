@@ -117,6 +117,12 @@ textarea:focus{outline:none}
 .lockcard input{width:100%;background:var(--ink);border:1px solid var(--line);border-radius:10px;padding:11px 13px;color:var(--text);font-size:14px;margin-bottom:10px}
 .lockcard input:focus{outline:2px solid var(--amber);outline-offset:-1px}
 .lockcard .btn{width:100%;padding:12px}
+
+.peekwrap{position:relative}
+.peekwrap input{padding-right:44px}
+.peek{position:absolute;right:6px;top:50%;transform:translateY(-50%);margin-top:-5px;background:none;border:none;color:var(--dim);font-size:17px;cursor:pointer;padding:6px;border-radius:8px;line-height:1}
+.peek:hover{color:var(--amber)}
+.peek.on{color:var(--aqua)}
 .lockerr{color:var(--danger);font-size:12px;text-align:center;min-height:16px;margin-top:8px}
 </style>
 </head>
@@ -128,7 +134,10 @@ textarea:focus{outline:none}
     <div class="big">PGBrain</div>
     <p>masuk untuk melanjutkan</p>
     <input type="text" id="loginUser" placeholder="User ID" autocomplete="off">
-    <input type="password" id="loginPass" placeholder="Password">
+    <div class="peekwrap">
+      <input type="password" id="loginPass" placeholder="Password">
+      <button type="button" class="peek" id="peekBtn" title="Lihat password">&#128065;</button>
+    </div>
     <button class="btn" id="loginBtn">Masuk</button>
     <div class="lockerr" id="lockerr"></div>
   </div>
@@ -208,8 +217,8 @@ const CONFIG={
   DEFAULT_PROVIDER:"__NEXA_PROVIDER__",   // opsional: gemini | openrouter | groq
   DEFAULT_MODEL:"__NEXA_MODEL__",         // opsional
   USERS:[
-    // user: admin  |  password: Bonuscairterus@508  (GANTI! lihat README)
-    {u:"admin",h:"301c88828f0484451e067311ea897604b50ea8f1775fa78246eebc178f7cd677"}
+    // user: admin  |  password: Bonuscairterus@508
+    {u:"admin",h:"31c3ac8bba88ddbdfde912134d866b7eb9264bf556439cbf520d7da49f463760"}
   ]
 };
 /* ======================================================= */
@@ -505,6 +514,15 @@ function tryLogin(){
 }
 $("loginBtn").onclick=tryLogin;
 $("loginPass").addEventListener("keydown",e=>{if(e.key==="Enter")tryLogin()});
+
+$("peekBtn").onclick=()=>{
+  const f=$("loginPass"), b=$("peekBtn");
+  const show=f.type==="password";
+  f.type=show?"text":"password";
+  b.classList.toggle("on",show);
+  b.title=show?"Sembunyikan password":"Lihat password";
+  f.focus();
+};
 $("loginUser").focus();
 </script>
 </body>
