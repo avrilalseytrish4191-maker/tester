@@ -127,9 +127,17 @@ header{display:flex;align-items:center;gap:12px;padding:14px 2px 10px;flex-shrin
 .dlall:hover{border-color:var(--aqua)}
 /* ===== Composer ===== */
 .composer{flex-shrink:0;padding:10px 0 max(14px,env(safe-area-inset-bottom))}
-.imgpreview{display:none;align-items:center;gap:10px;margin-bottom:8px;font:12px var(--mono);color:var(--dim)}
-.imgpreview img{height:44px;border-radius:8px;border:1px solid var(--line)}
-.imgpreview button{background:none;border:none;color:var(--danger);cursor:pointer;font-size:16px}
+.filechips{display:none;flex-wrap:wrap;gap:8px;margin-bottom:8px}
+.filechips.show{display:flex}
+.fchip{display:flex;align-items:center;gap:8px;background:var(--ink2);border:1px solid var(--line);
+  border-radius:10px;padding:6px 10px;font:12px var(--mono);color:var(--dim);max-width:260px}
+.fchip img{height:34px;width:34px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
+.fchip .fx{background:none;border:none;color:var(--danger);cursor:pointer;font-size:15px;padding:0 2px}
+.fchip .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
+.dropzone{position:fixed;inset:0;z-index:40;display:none;align-items:center;justify-content:center;
+  background:rgba(11,18,32,.85);border:3px dashed var(--amber);border-radius:20px;pointer-events:none}
+.dropzone.show{display:flex}
+.dropzone span{font-size:20px;color:var(--amber);font-weight:700}
 .inputrow{display:flex;gap:8px;align-items:flex-end;background:var(--ink2);border:1px solid var(--line);border-radius:18px;padding:8px}
 .inputrow:focus-within{border-color:var(--amber)}
 .icon{background:none;border:none;color:var(--dim);font-size:19px;cursor:pointer;padding:8px;border-radius:10px;flex-shrink:0}
@@ -163,6 +171,7 @@ textarea:focus{outline:none}
 </head>
 <body>
 <div class="aurora"></div>
+<div class="dropzone" id="dropzone"><span>Lepaskan file di sini 📂</span></div>
 <div class="lock" id="lock">
   <div class="aurora2"></div>
   <div class="lockcard">
@@ -220,10 +229,10 @@ textarea:focus{outline:none}
   </div>
 
   <div class="composer">
-    <div class="imgpreview" id="imgpreview"><img id="previmg" alt=""><span id="imgname"></span><button id="clearimg" title="Hapus gambar">✕</button></div>
+    <div class="filechips" id="filechips"></div>
     <div class="inputrow">
-      <button class="icon" id="attach" title="Unggah gambar">📎</button>
-      <input type="file" id="file" accept="image/*" hidden>
+      <button class="icon" id="attach" title="Lampirkan file (gambar / kode / teks)">📎</button>
+      <input type="file" id="file" multiple hidden>
       <textarea id="input" rows="1" placeholder="Tulis apa saja…"></textarea>
       <button class="send" id="send" title="Kirim" disabled>➤</button>
     </div>
@@ -266,7 +275,7 @@ const hasBuiltin = ["gemini","openrouter","groq"].some(p=>builtinKey(p));
 
 let API_KEY="", MODEL="", PROVIDER="gemini", MODE="chat";
 let history=[];            // riwayat netral: {role:"user"|"model", text, img:{mime,b64}|null}
-let pendingImage=null;
+let pendingFiles=[];   // {kind:"image"|"text", name, ...}
 let busy=false;
 
 const PROVIDERS={
@@ -367,23 +376,53 @@ $("modes").addEventListener("click",e=>{
     innovate:"Mau inovasi soal apa?",image:"Unggah gambar lalu tanyakan…",
     code:"Jelaskan program yang kamu mau…",write:"Tempel teks atau minta tulisan baru…"
   }[MODE];
-  if(MODE==="image"&&!pendingImage)$("file").click();
+  if(MODE==="image"&&!pendingFiles.some(f=>f.kind==="image"))$("file").click();
 });
 
-/* ---- gambar ---- */
+/* ---- lampiran universal: gambar + file kode/teks ---- */
+const TEXT_EXT=["html","htm","css","js","jsx","ts","tsx","py","json","txt","md","xml","yml","yaml",
+  "csv","sql","sh","bat","php","java","c","cpp","h","kt","swift","ini","cfg","env","vue","svelte"];
+function addFiles(list){
+  for(const f of list){
+    const ext=(f.name.split(".").pop()||"").toLowerCase();
+    if(f.type.startsWith("image/")){
+      const r=new FileReader();
+      r.onload=()=>{pendingFiles.push({kind:"image",mime:f.type,b64:r.result.split(",")[1],url:r.result,name:f.name});renderChips()};
+      r.readAsDataURL(f);
+    }else if(f.type.startsWith("text/")||TEXT_EXT.includes(ext)){
+      if(f.size>1024*1024){alert(f.name+" terlalu besar (maks 1 MB untuk file teks).");continue}
+      const r=new FileReader();
+      r.onload=()=>{pendingFiles.push({kind:"text",name:f.name,content:r.result});renderChips()};
+      r.readAsText(f);
+    }else{
+      alert("Jenis file '"+f.name+"' belum didukung. Gunakan gambar atau file teks/kode.");
+    }
+  }
+}
+function renderChips(){
+  const c=$("filechips");
+  c.innerHTML="";
+  pendingFiles.forEach((f,i)=>{
+    const ch=document.createElement("div");
+    ch.className="fchip";
+    ch.innerHTML=(f.kind==="image"?`<img src="${f.url}" alt="">`:`<span>📄</span>`)
+      +`<span class="nm">${f.name}</span><button class="fx" title="Hapus">✕</button>`;
+    ch.querySelector(".fx").onclick=()=>{pendingFiles.splice(i,1);renderChips()};
+    c.appendChild(ch);
+  });
+  c.classList.toggle("show",pendingFiles.length>0);
+}
 $("attach").onclick=()=>$("file").click();
-$("file").onchange=e=>{
-  const f=e.target.files[0]; if(!f)return;
-  const r=new FileReader();
-  r.onload=()=>{
-    pendingImage={mime:f.type,b64:r.result.split(",")[1],url:r.result,name:f.name};
-    $("previmg").src=r.result; $("imgname").textContent=f.name;
-    $("imgpreview").style.display="flex";
-  };
-  r.readAsDataURL(f);
-  e.target.value="";
-};
-$("clearimg").onclick=()=>{pendingImage=null;$("imgpreview").style.display="none"};
+$("file").onchange=e=>{addFiles(e.target.files);e.target.value=""};
+/* drag & drop ke mana pun di jendela */
+let dragDepth=0;
+document.addEventListener("dragenter",e=>{e.preventDefault();dragDepth++;$("dropzone").classList.add("show")});
+document.addEventListener("dragleave",e=>{e.preventDefault();dragDepth--;if(dragDepth<=0){dragDepth=0;$("dropzone").classList.remove("show")}});
+document.addEventListener("dragover",e=>e.preventDefault());
+document.addEventListener("drop",e=>{
+  e.preventDefault();dragDepth=0;$("dropzone").classList.remove("show");
+  if(e.dataTransfer&&e.dataTransfer.files.length)addFiles(e.dataTransfer.files);
+});
 
 /* ---- input ---- */
 const ta=$("input");
@@ -511,7 +550,7 @@ function decorate(aiDiv, fullText){
 function buildGeminiBody(){
   const contents=history.map(m=>{
     const parts=[];
-    if(m.img)parts.push({inline_data:{mime_type:m.img.mime,data:m.img.b64}});
+    if(m.imgs)for(const im of m.imgs)parts.push({inline_data:{mime_type:im.mime,data:im.b64}});
     if(m.text)parts.push({text:m.text});
     return {role:m.role==="model"?"model":"user",parts};
   });
@@ -525,11 +564,10 @@ function buildOpenAIBody(){
   const msgs=[{role:"system",content:SYSTEMS[MODE]}];
   for(const m of history){
     if(m.role==="model"){msgs.push({role:"assistant",content:m.text});continue}
-    if(m.img){
-      msgs.push({role:"user",content:[
-        {type:"image_url",image_url:{url:`data:${m.img.mime};base64,${m.img.b64}`}},
-        {type:"text",text:m.text}
-      ]});
+    if(m.imgs&&m.imgs.length){
+      const content=m.imgs.map(im=>({type:"image_url",image_url:{url:`data:${im.mime};base64,${im.b64}`}}));
+      content.push({type:"text",text:m.text});
+      msgs.push({role:"user",content});
     }else msgs.push({role:"user",content:m.text});
   }
   return {model:MODEL,messages:msgs,stream:true,temperature:MODE==="innovate"?1.1:0.8};
@@ -543,12 +581,19 @@ async function sendMsg(){
   busy=true;$("send").disabled=true;
   ta.value="";ta.style.height="auto";
 
-  const img=pendingImage;
-  pendingImage=null;$("imgpreview").style.display="none";
-  const userText=text||"Analisis gambar ini dan beri saran perbaikannya.";
-
-  addMsg("user",esc(text||"(gambar)"),img?img.url:null);
-  history.push({role:"user",text:userText,img:img?{mime:img.mime,b64:img.b64}:null});
+  const atts=pendingFiles; pendingFiles=[]; renderChips();
+  const imgs=atts.filter(f=>f.kind==="image").map(f=>({mime:f.mime,b64:f.b64,url:f.url}));
+  const texts=atts.filter(f=>f.kind==="text");
+  let userText=text||(imgs.length?"Analisis gambar ini dan beri saran perbaikannya.":"Periksa file terlampir.");
+  if(texts.length){
+    userText+="\n\nFile terlampir dari pengguna:";
+    for(const t of texts)
+      userText+=`\n\n=== ${t.name} ===\n\`\`\`\n${t.content}\n\`\`\``;
+    userText+="\n\nJika pengguna meminta perubahan, balas dengan file LENGKAP hasil perubahan di dalam blok kode markdown (\`\`\`), bukan potongan.";
+  }
+  const label=esc(text||"")+(atts.length?`<div style="font:11px var(--mono);color:var(--dim);margin-top:6px">📎 ${atts.map(f=>esc(f.name)).join(", ")}</div>`:"");
+  addMsg("user",label||"(lampiran)",imgs[0]?imgs[0].url:null);
+  history.push({role:"user",text:userText,imgs});
 
   const aiDiv=addMsg("ai",`<span class="typing"><i></i><i></i><i></i></span>`);
   let full="";
@@ -597,7 +642,7 @@ async function sendMsg(){
       }
     }
     if(!full){aiDiv.classList.add("err");aiDiv.innerHTML="Tidak ada respons. Permintaan mungkin ditolak kebijakan keamanan penyedia — coba ubah kalimatnya, atau ganti model di panel ⚙."}
-    else {history.push({role:"model",text:full,img:null});decorate(aiDiv,full);}
+    else {history.push({role:"model",text:full,imgs:null});decorate(aiDiv,full);}
   }catch(e){
     aiDiv.classList.add("err");
     aiDiv.innerHTML="⚠ "+esc(e.message)+"<br><small>Periksa API key, kuota harian, atau koneksi internet. Coba juga ganti model/penyedia di panel ⚙.</small>";
