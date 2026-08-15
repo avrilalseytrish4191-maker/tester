@@ -581,14 +581,18 @@ function decorate(aiDiv, fullText){
 /* ---- pembuatan / pengubahan gambar ---- */
 const IMAGE_MODELS={
   gemini:[
-    ["gemini-3-pro-image","Nano Banana Pro (Google) — kualitas tertinggi, jago teks dalam gambar"],
-    ["gemini-3.1-flash-image","Nano Banana 2 (Google) — cepat & murah, terbaik untuk edit"]
+    ["gemini-3-pro-image","Nano Banana Pro (Google) — kualitas tertinggi & teks rapi","~10-20 dtk"],
+    ["gemini-3.1-flash-image","Nano Banana 2 (Google) — versi lama, cepat & hemat","~4-8 dtk"]
   ],
   openrouter:[
-    ["google/gemini-3-pro-image","Nano Banana Pro (Google) — terbaru, kualitas tertinggi & teks rapi"],
-    ["openai/gpt-5.4-image-2","GPT-5.4 Image 2 (OpenAI) — terbaru dari ChatGPT, instruksi & teks akurat"],
-    ["google/gemini-3.1-flash-image","Nano Banana 2 (Google) — versi lama, cepat & hemat"],
-    ["openai/gpt-image-1","GPT Image 1 (OpenAI) — versi lama, latar transparan"]
+    ["google/gemini-3-pro-image","Nano Banana Pro (Google) — terbaru, kualitas tertinggi","~10-20 dtk"],
+    ["openai/gpt-5.4-image-2","GPT-5.4 Image 2 (OpenAI) — terbaru dari ChatGPT, teks akurat","~15-30 dtk"],
+    ["x-ai/grok-imagine-image-2.0","Grok Imagine 2.0 (xAI) — fotorealistis, teks multibahasa","~8-15 dtk"],
+    ["bytedance-seed/seedream-5-0-pro","Seedream 5.0 Pro (ByteDance) — detail tinggi, serbaguna","~10-20 dtk"],
+    ["bytedance-seed/seedream-5-0-lite","Seedream 5.0 Lite (ByteDance) — cepat & hemat","~5-10 dtk"],
+    ["openai/gpt-image-1-mini","GPT Image 1 Mini (OpenAI) — hemat biaya & latensi rendah","~8-15 dtk"],
+    ["google/gemini-3.1-flash-image","Nano Banana 2 (Google) — versi lama, cepat","~4-8 dtk"],
+    ["openai/gpt-image-1","GPT Image 1 (OpenAI) — versi lama, latar transparan","~10-20 dtk"]
   ],
   groq:[]
 };
@@ -596,7 +600,7 @@ let IMAGE_MODEL="";
 function fillImageModels(){
   const list=IMAGE_MODELS[PROVIDER]||[];
   const sel=$("imgmodel");
-  sel.innerHTML=list.map(m=>`<option value="${m[0]}">${m[1]}</option>`).join("");
+  sel.innerHTML=list.map(m=>`<option value="${m[0]}">${m[1]}  ·  ⏱ ${m[2]||"?"}</option>`).join("");
   IMAGE_MODEL=list.length?list[0][0]:"";
   $("imgbar").classList.toggle("show",MODE==="image"&&list.length>0);
 }
@@ -673,28 +677,25 @@ async function runImageGen(prompt,imgs,aiDiv){
       const inl=p.inlineData||p.inline_data;
       if(inl)images.push(`data:${inl.mimeType||inl.mime_type||"image/png"};base64,${inl.data}`);
     }
-  }else{ // openrouter
-    const content=imgs.map(im=>({type:"image_url",image_url:{url:`data:${im.mime};base64,${im.b64}`}}));
-    content.push({type:"text",text:prompt+`\n\n(variation seed: ${seed})`});
-    const res=await fetch("https://openrouter.ai/api/v1/chat/completions",{
+  }else{ // openrouter — pakai Unified Image API (mendukung semua model gambar)
+    const body={model:useModel,prompt:prompt,seed};
+    if(imgs.length) body.input_images=imgs.map(im=>`data:${im.mime};base64,${im.b64}`);
+    const res=await fetch("https://openrouter.ai/api/v1/images",{
       method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+API_KEY},
-      body:JSON.stringify({model:useModel,modalities:["image","text"],
-        messages:[{role:"user",content}]})
+      body:JSON.stringify(body)
     });
     if(!res.ok){const err=await res.json().catch(()=>({}));throw new Error(err.error?.message||`HTTP ${res.status}`)}
     const data=await res.json();
-    const msg=data.choices?.[0]?.message||{};
-    text=(typeof msg.content==="string")?msg.content:"";
-    // format A: message.images[].image_url.url
-    for(const im of (msg.images||[]))
-      if(im.image_url&&im.image_url.url)images.push(im.image_url.url);
-    // format B: content array berisi image_url
-    if(Array.isArray(msg.content))
-      for(const c of msg.content){
-        if(c.type==="output_image"&&c.image_url)images.push(c.image_url);
-        if(c.type==="image_url"&&c.image_url?.url)images.push(c.image_url.url);
-        if(c.type==="text")text+=c.text||"";
-      }
+    // Kumpulkan gambar dari berbagai kemungkinan bentuk respons Image API
+    const bucket=data.data||data.images||data.output||[];
+    for(const it of (Array.isArray(bucket)?bucket:[bucket])){
+      if(!it)continue;
+      if(typeof it==="string"){images.push(it);continue}
+      if(it.b64_json){images.push("data:image/png;base64,"+it.b64_json);continue}
+      if(it.url){images.push(it.url);continue}
+      if(it.image_url){images.push(typeof it.image_url==="string"?it.image_url:it.image_url.url);continue}
+    }
+    if(data.text)text=data.text;
   }
   const imTag=`<span class="tag">PGBrain · 🎨 ${useModel.split("/").pop()}</span>`;
   aiDiv.innerHTML=imTag+(text?md(text):"");
