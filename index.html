@@ -736,14 +736,14 @@ function decorate(aiDiv, fullText){
 /* ---- Upscale via Replicate (lewat Cloudflare Worker) ---- */
 let WORKER_URL=builtinWorker();
 // version id Replicate (bisa berubah; ganti bila perlu dari halaman model di replicate.com)
-// [slug, version, deskripsi, skalaYangDidukung[], namaParamGambar]
+// [slug, (tak dipakai), deskripsi, skalaYangDidukung[], namaParamGambar, namaParamSkala]
 const UPSCALE_MODELS=[
-  ["nightmareai/real-esrgan","f121d640bd286e1fdc67f9799164c1d5be36ff74576ee11c803ae5b665dd46aa",
-   "Real-ESRGAN — serbaguna, cepat & murah (foto, gambar AI, screenshot)",[2,4],"image"],
-  ["philz1337x/clarity-upscaler","dfad41707589d68ecdccd1dfa600d55a208f9310748e44bfe35b4a6291453d5e",
-   "Clarity Upscaler — kreatif, tajam untuk potret & detail wajah",[2,4],"image"],
-  ["tencentarc/gfpgan","0fbacf7afc6c144e5be9767cff80f25aff23e52b0708f17e20f9879b2f21516c",
-   "GFPGAN — khusus perbaikan & pertajam wajah",[2],"img"]
+  ["nightmareai/real-esrgan","",
+   "Real-ESRGAN — serbaguna, cepat & murah (foto, gambar AI, screenshot)",[2,4],"image","scale"],
+  ["philz1337x/clarity-upscaler","",
+   "Clarity Upscaler — kreatif, tajam untuk potret & detail wajah",[2,4],"image","scale_factor"],
+  ["tencentarc/gfpgan","",
+   "GFPGAN — khusus perbaikan & pertajam wajah",[2,4],"img","scale"]
 ];
 let UPSCALE_MODEL=UPSCALE_MODELS[0];
 let UPSCALE_SCALE=2;
@@ -785,12 +785,12 @@ async function runUpscale(imgs,aiDiv){
   }
   const m=UPSCALE_MODEL;
   const imgKey=m[4]||"image";           // nama parameter gambar (beda antar model)
+  const scaleKey=m[5]||"scale";         // nama parameter skala (beda antar model)
   const input={}; input[imgKey]=`data:${imgs[0].mime};base64,${imgs[0].b64}`;
-  const allowed=m[3]||[];
-  if(allowed.length>1) input.scale=UPSCALE_SCALE;  // hanya kirim scale bila model punya pilihan
+  input[scaleKey]=UPSCALE_SCALE;        // kirim skala pilihan pengguna
   const res=await fetch(WORKER_URL,{
     method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({version:m[1],input})
+    body:JSON.stringify({model:m[0],input})   // panggil model lewat nama (owner/name)
   });
   if(!res.ok){const err=await res.json().catch(()=>({}));throw new Error(err.error||`HTTP ${res.status}`)}
   const data=await res.json();
