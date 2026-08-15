@@ -27,6 +27,7 @@ jobs:
           KEY_GEMINI: ${{ secrets.KEY_GEMINI }}
           KEY_OPENROUTER: ${{ secrets.KEY_OPENROUTER }}
           KEY_GROQ: ${{ secrets.KEY_GROQ }}
+          KEY_OPENAI: ${{ secrets.KEY_OPENAI }}
           NEXA_PROVIDER: ${{ secrets.NEXA_PROVIDER }}
           NEXA_MODEL: ${{ secrets.NEXA_MODEL }}
           WORKER_URL: ${{ secrets.WORKER_URL }}
@@ -36,6 +37,7 @@ jobs:
           if ($env:KEY_GEMINI)     { $html = $html.Replace('__KEY_GEMINI__', $env:KEY_GEMINI) }
           if ($env:KEY_OPENROUTER) { $html = $html.Replace('__KEY_OPENROUTER__', $env:KEY_OPENROUTER) }
           if ($env:KEY_GROQ)       { $html = $html.Replace('__KEY_GROQ__', $env:KEY_GROQ) }
+          if ($env:KEY_OPENAI)     { $html = $html.Replace('__KEY_OPENAI__', $env:KEY_OPENAI) }
           if ($env:NEXA_PROVIDER)  { $html = $html.Replace('__NEXA_PROVIDER__', $env:NEXA_PROVIDER) }
           if ($env:NEXA_MODEL)     { $html = $html.Replace('__NEXA_MODEL__', $env:NEXA_MODEL) }
           if ($env:WORKER_URL)     { $html = $html.Replace('__WORKER_URL__', $env:WORKER_URL) }
