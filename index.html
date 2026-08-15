@@ -276,7 +276,7 @@ textarea:focus{outline:none}
       <button class="btn" id="connectBtn">Hubungkan</button>
     </div>
     <div class="keyrow" style="margin-top:8px">
-      <input type="text" id="workerurl" placeholder="(Opsional) Alamat jembatan Upscale: https://...workers.dev" autocomplete="off" style="flex:1">
+      <input type="text" id="workerurl" placeholder="(Opsional) Alamat jembatan Upscale (fal.ai): https://...workers.dev" autocomplete="off" style="flex:1">
     </div>
     <div class="note">Kunci hanya disimpan di memori halaman ini dan hilang saat halaman ditutup — tidak dikirim ke mana pun selain Google.</div>
   </div>
@@ -736,27 +736,28 @@ function decorate(aiDiv, fullText){
 /* ---- Upscale via Replicate (lewat Cloudflare Worker) ---- */
 let WORKER_URL=builtinWorker();
 // version id Replicate (bisa berubah; ganti bila perlu dari halaman model di replicate.com)
-// [slug, (tak dipakai), deskripsi, skalaYangDidukung[], namaParamGambar, namaParamSkala]
+// [endpoint fal.ai, (tak dipakai), deskripsi, skalaDidukung[], paramGambar, paramSkala]
 const UPSCALE_MODELS=[
-  ["nightmareai/real-esrgan","",
-   "Real-ESRGAN — serbaguna, cepat & murah (foto, gambar AI, screenshot)",[2,4],"image","scale"],
-  ["philz1337x/clarity-upscaler","",
-   "Clarity Upscaler — kreatif, tajam untuk potret & detail wajah",[2,4],"image","scale_factor"],
-  ["tencentarc/gfpgan","",
-   "GFPGAN — khusus perbaikan & pertajam wajah",[2,4],"img","scale"]
+  ["fal-ai/esrgan","",
+   "Real-ESRGAN — serbaguna, cepat & murah (foto, gambar AI, screenshot)",[2,4],"image_url","scale"],
+  ["fal-ai/crystal-upscaler","",
+   "Crystal Upscaler — tajam untuk potret & detail wajah",[2],"image_url",null],
+  ["fal-ai/recraft/upscale/creative","",
+   "Recraft Creative — perbesar kreatif, tambah detail & tekstur",[2],"image_url",null]
 ];
 let UPSCALE_MODEL=UPSCALE_MODELS[0];
 let UPSCALE_SCALE=2;
 function refreshScaleButtons(){
-  const allowed=UPSCALE_MODEL[3]||[]; // daftar skala yg didukung model ini
-  // jika skala terpilih tak didukung, pindah ke skala pertama yg valid
-  if(!allowed.includes(UPSCALE_SCALE)) UPSCALE_SCALE=allowed[0];
+  const hasScale=!!UPSCALE_MODEL[5];      // model punya parameter skala?
+  const allowed=hasScale?(UPSCALE_MODEL[3]||[]):[];
+  if(hasScale && !allowed.includes(UPSCALE_SCALE)) UPSCALE_SCALE=allowed[0];
   document.querySelectorAll(".scalebtn").forEach(b=>{
     const s=+b.dataset.scale;
-    const ok=allowed.includes(s);
-    b.disabled=!ok;                              // skala tak didukung = mati (tak bisa diklik)
+    const ok=hasScale && allowed.includes(s);
+    b.disabled=!ok;
     b.classList.toggle("active", ok && s===UPSCALE_SCALE);
   });
+  $("scalegroup").style.opacity=hasScale?"1":".4";
 }
 function fillUpscaleModels(){
   const sel=$("upmodel");
@@ -814,21 +815,21 @@ async function runUpscale(imgs,aiDiv){
     return;
   }
   const m=UPSCALE_MODEL;
-  const imgKey=m[4]||"image";           // nama parameter gambar (beda antar model)
-  const scaleKey=m[5]||"scale";         // nama parameter skala (beda antar model)
+  const imgKey=m[4]||"image_url";
+  const scaleKey=m[5];                  // null bila model tak punya parameter skala
   const small=await shrinkImage(imgs[0].mime,imgs[0].b64);
   const input={}; input[imgKey]=`data:${small.mime};base64,${small.b64}`;
-  input[scaleKey]=UPSCALE_SCALE;        // kirim skala pilihan pengguna
+  if(scaleKey) input[scaleKey]=UPSCALE_SCALE;
   const res=await fetch(WORKER_URL,{
     method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({model:m[0],input})   // panggil model lewat nama (owner/name)
+    body:JSON.stringify({model:m[0],input})   // endpoint fal.ai
   });
   if(!res.ok){const err=await res.json().catch(()=>({}));throw new Error(err.error||`HTTP ${res.status}`)}
   const data=await res.json();
   let url=data.output;
   if(Array.isArray(url)) url=url[0];
   if(!url) throw new Error("Tidak ada hasil dari model.");
-  aiDiv.innerHTML=`<span class="tag">PGBrain · 🔍 ${m[0].split("/").pop()}${(m[3]&&m[3].length>1)?" · "+UPSCALE_SCALE+"×":""}</span>`;
+  aiDiv.innerHTML=`<span class="tag">PGBrain · 🔍 ${m[0].split("/").pop()}${m[5]?" · "+UPSCALE_SCALE+"×":""}</span>`;
   // tampilkan hasil (URL gambar) + tombol unduh
   const w=document.createElement("div"); w.className="genwrap";
   const name=`pgbrain-upscale-${genCounter++}.png`;
