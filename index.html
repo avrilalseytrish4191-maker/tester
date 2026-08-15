@@ -602,15 +602,20 @@ function openChat(id){
 }
 
 // simpan pesan ke chat aktif (buat chat baru bila belum ada)
-function recordMessage(role,text){
-  let c=currentChat();
+// role, text, targetId(opsional). Mengembalikan id chat tujuan.
+// targetId mengunci balasan AI ke chat asal, meski pengguna pindah tab.
+function recordMessage(role,text,targetId){
+  let c = targetId ? chats.find(x=>x.id===targetId) : currentChat();
   if(!c){
     c={id:uid(),title:(text||"Chat baru").slice(0,40),author:meName,pinned:false,archived:false,ts:Date.now(),messages:[]};
-    chats.unshift(c); currentId=c.id;
+    chats.unshift(c);
+    // hanya pindahkan tampilan ke chat baru bila pengguna belum pindah ke tab lain
+    if(!targetId && currentId===null) currentId=c.id;
   }
   c.messages.push({role,text}); c.ts=Date.now();
   if(c.messages.length===1) c.title=(text||"Chat baru").slice(0,40);
   saveChats(); renderChatList();
+  return c.id;
 }
 
 function renderChatList(){
@@ -1270,7 +1275,7 @@ async function sendMsg(){
   const label=quoteHtml+esc(text||"")+(atts.length?`<div style="font:11px var(--mono);color:var(--dim);margin-top:6px">📎 ${atts.map(f=>esc(f.name)).join(", ")}</div>`:"");
   addMsg("user",label||"(lampiran)",imgs[0]?imgs[0].url:null, (text||userText));
   history.push({role:"user",text:userText,imgs});
-  recordMessage("user", text||userText);
+  const targetChatId = recordMessage("user", text||userText);
 
   const aiDiv=addMsg("ai",`<span class="typing"><i></i><i></i><i></i></span>`);
 
@@ -1298,7 +1303,10 @@ async function sendMsg(){
   }
 
   let full="";
-  const paint=()=>{aiDiv.innerHTML=tagHtml()+md(full);scrollIfBottom();};
+  const paint=()=>{
+    // gambar ke layar hanya bila pengguna masih di chat asal (biar tak nyasar ke tab lain)
+    if(currentId===targetChatId || currentId===null){aiDiv.innerHTML=tagHtml()+md(full);scrollIfBottom();}
+  };
 
   try{
     let url,headers,body;
@@ -1343,7 +1351,12 @@ async function sendMsg(){
       }
     }
     if(!full){aiDiv.classList.add("err");aiDiv.innerHTML="Tidak ada respons. Permintaan mungkin ditolak kebijakan keamanan penyedia — coba ubah kalimatnya, atau ganti model di panel ⚙."}
-    else {history.push({role:"model",text:full,imgs:null});decorate(aiDiv,full);recordMessage("model",full);}
+    else {
+      history.push({role:"model",text:full,imgs:null});
+      recordMessage("model",full,targetChatId);
+      if(currentId===targetChatId){decorate(aiDiv,full);}   // tampil hanya di tab asal
+      else{aiDiv.remove();}                                  // sudah pindah tab: buang gelembung nyasar
+    }
   }catch(e){
     aiDiv.classList.add("err");
     aiDiv.innerHTML="⚠ "+esc(e.message)+"<br><small>Periksa API key, kuota harian, atau koneksi internet. Coba juga ganti model/penyedia di panel ⚙.</small>";
