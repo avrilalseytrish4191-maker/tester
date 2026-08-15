@@ -125,6 +125,10 @@ header{display:flex;align-items:center;gap:12px;padding:14px 2px 10px;flex-shrin
 .dlall{align-self:flex-start;background:var(--ink3);border:1px solid var(--line);color:var(--text);
   border-radius:9px;padding:7px 14px;font-size:12.5px;cursor:pointer;display:inline-flex;gap:6px;align-items:center}
 .dlall:hover{border-color:var(--aqua)}
+
+.genwrap{margin-top:10px}
+.genwrap img.genimg{max-width:100%;width:auto;max-height:420px;border-radius:12px;border:1px solid var(--line);display:block}
+.genactions{display:flex;gap:8px;margin-top:8px;user-select:none;-webkit-user-select:none}
 /* ===== Composer ===== */
 .composer{flex-shrink:0;padding:10px 0 max(14px,env(safe-area-inset-bottom))}
 .filechips{display:none;flex-wrap:wrap;gap:8px;margin-bottom:8px}
@@ -216,7 +220,7 @@ textarea:focus{outline:none}
     <button class="chip active" data-mode="chat">💬 Ngobrol</button>
     <button class="chip" data-mode="think">🧠 Berpikir Dalam</button>
     <button class="chip" data-mode="innovate">💡 Inovasi</button>
-    <button class="chip" data-mode="image">🖼 Analisis & Perbaikan Gambar</button>
+    <button class="chip" data-mode="image">🎨 Buat / Ubah Gambar</button>
     <button class="chip" data-mode="code">⌨ Kode</button>
     <button class="chip" data-mode="write">✍ Penulis</button>
   </div>
@@ -283,12 +287,11 @@ const PROVIDERS={
     label:"Gemini",
     keyUrl:"https://aistudio.google.com/apikey",
     groups:[
-      ["GRATIS",[
-        ["gemini-2.5-flash","Gemini 2.5 Flash — serbaguna & cepat, terbaik untuk chat harian"],
-        ["gemini-2.5-flash-lite","Gemini 2.5 Flash-Lite — paling hemat kuota, tanya-jawab ringan"]
-      ]],
-      ["BERBAYAR",[
-        ["gemini-2.5-pro","Gemini 2.5 Pro 💰 — terbaik untuk penalaran rumit, riset & analisis gambar"]
+      ["MODEL BERBAYAR (per token)",[
+        ["gemini-3.1-pro","Gemini 3.1 Pro — flagship: penalaran terdalam, riset & dokumen raksasa (konteks 2 juta token)"],
+        ["gemini-3.6-flash","Gemini 3.6 Flash — terbaru (Jul 2026): terbaik untuk koding, kerja agentic & tugas harian, hemat token"],
+        ["gemini-3.5-flash-lite","Gemini 3.5 Flash-Lite — tercepat & termurah: tanya-jawab ringan volume tinggi"],
+        ["gemini-2.5-pro","Gemini 2.5 Pro — generasi lama yang teruji: penalaran kuat dengan harga lebih murah"]
       ]]
     ]
   },
@@ -296,16 +299,13 @@ const PROVIDERS={
     label:"OpenRouter",
     keyUrl:"https://openrouter.ai/keys",
     groups:[
-      ["GRATIS",[
-        ["google/gemini-2.0-flash-exp:free","Gemini Flash — otak Gemini, serbaguna & bisa gambar"],
-        ["deepseek/deepseek-chat-v3-0324:free","DeepSeek V3 — terbaik untuk koding & matematika"],
-        ["meta-llama/llama-3.3-70b-instruct:free","Llama 3.3 70B — terbaik untuk ngobrol natural"]
-      ]],
-      ["BERBAYAR (perlu isi saldo)",[
-        ["anthropic/claude-sonnet-4.5","Claude Sonnet 4.5 💰 — terbaik untuk koding & tulisan berkualitas"],
-        ["openai/gpt-4o","GPT-4o 💰 — serbaguna premium, kuat di gambar & percakapan"],
-        ["google/gemini-2.5-pro","Gemini 2.5 Pro 💰 — penalaran dalam & konteks super panjang"],
-        ["deepseek/deepseek-r1","DeepSeek R1 💰 — penalaran langkah-demi-langkah, murah"]
+      ["MODEL BERBAYAR (perlu saldo)",[
+        ["anthropic/claude-opus-5","Claude Opus 5 — kelas tertinggi: penalaran & koding paling rumit, proyek besar"],
+        ["anthropic/claude-sonnet-5","Claude Sonnet 5 — terbaik untuk koding serius & tulisan berkualitas tinggi"],
+        ["anthropic/claude-haiku-4.5","Claude Haiku 4.5 — cepat & hemat: chat harian dengan rasa Claude"],
+        ["openai/gpt-5.1","GPT-5.1 — serbaguna premium: percakapan, analisis & multimodal"],
+        ["google/gemini-3.1-pro","Gemini 3.1 Pro — konteks terpanjang (2 juta token): baca dokumen/kode super besar"],
+        ["deepseek/deepseek-v4-pro","DeepSeek V4 Pro — koding & matematika termurah di kelasnya (konteks 1 juta)"]
       ]]
     ]
   },
@@ -313,13 +313,10 @@ const PROVIDERS={
     label:"Groq",
     keyUrl:"https://console.groq.com/keys",
     groups:[
-      ["GRATIS",[
-        ["llama-3.3-70b-versatile","Llama 3.3 70B — respon paling ngebut, chat & tulisan"],
-        ["meta-llama/llama-4-scout-17b-16e-instruct","Llama 4 Scout — terbaik untuk analisis gambar (gratis)"]
-      ]],
-      ["BERBAYAR (perlu isi saldo)",[
-        ["meta-llama/llama-4-maverick-17b-128e-instruct","Llama 4 Maverick 💰 — versi lebih pintar, tetap ngebut"],
-        ["deepseek-r1-distill-llama-70b","DeepSeek R1 Distill 💰 — penalaran cepat & murah"]
+      ["MODEL BERBAYAR (per token, super ngebut)",[
+        ["openai/gpt-oss-120b","GPT-OSS 120B — penalaran terbaik di Groq: koding & analisis dengan kecepatan LPU"],
+        ["qwen/qwen3.6-27b","Qwen 3.6 27B — terpintar di Groq per benchmark: tugas umum & tulisan"],
+        ["openai/gpt-oss-20b","GPT-OSS 20B — terngebut (±950 token/detik): respon instan untuk chat ringan"]
       ]]
     ]
   }
@@ -330,7 +327,7 @@ function fillModels(){
   $("model").innerHTML=p.groups.map(g=>
     `<optgroup label="${g[0]}">`+g[1].map(m=>`<option value="${m[0]}">${m[1]}</option>`).join("")+`</optgroup>`
   ).join("");
-  $("provhint").innerHTML=`Ambil API key gratis di <a href="${p.keyUrl}" target="_blank" rel="noopener">${p.keyUrl.replace("https://","")}</a> (tanpa kartu kredit), tempel di bawah, lalu hubungkan. Model bertanda 💰 hanya jalan kalau akunmu punya saldo/billing.`;
+  $("provhint").innerHTML=`Ambil API key gratis di <a href="${p.keyUrl}" target="_blank" rel="noopener">${p.keyUrl.replace("https://","")}</a> , tempel di bawah, lalu hubungkan. Semua model di daftar ini berbayar per pemakaian — pastikan akun penyedia sudah diisi saldo/billing.`;
 }
 $("provider").onchange=e=>{
   const p=e.target.value;
@@ -345,7 +342,7 @@ const SYSTEMS={
   chat:"Kamu adalah PGBrain, asisten cerdas berbahasa Indonesia yang santai, jelas, dan to the point. Jawab dalam bahasa yang dipakai pengguna.",
   think:"Kamu adalah PGBrain mode Berpikir Dalam. Untuk setiap pertanyaan, uraikan penalaranmu langkah demi langkah secara terstruktur, pertimbangkan beberapa sudut pandang, lalu berikan kesimpulan yang tegas di akhir.",
   innovate:"Kamu adalah PGBrain mode Inovasi. Tugasmu menghasilkan ide-ide segar, tidak biasa, dan bisa dieksekusi. Berikan minimal 3 ide dengan penjelasan singkat cara mewujudkannya, urutkan dari yang paling berani.",
-  image:"Kamu adalah PGBrain mode Analisis Gambar. Saat pengguna mengunggah gambar: (1) deskripsikan isinya secara detail, (2) nilai kualitas teknisnya (komposisi, cahaya, warna, ketajaman), (3) berikan saran konkret langkah demi langkah untuk memperbagusnya, termasuk setelan edit spesifik (exposure, kontras, saturasi, crop) yang bisa langsung dipraktikkan.",
+  image:"Kamu adalah PGBrain mode Gambar. Bantu pengguna membuat dan mengubah gambar sesuai permintaan.",
   code:"Kamu adalah PGBrain mode Kode. Tulis kode yang bersih, modern, dan langsung jalan. Jelaskan singkat, utamakan kode. Gunakan blok kode markdown.",
   write:"Kamu adalah PGBrain mode Penulis. Bantu menulis, menyunting, dan memperbagus teks dalam bahasa Indonesia yang mengalir dan enak dibaca. Sesuaikan gaya dengan permintaan."
 };
@@ -373,7 +370,7 @@ $("modes").addEventListener("click",e=>{
   history=[];
   $("input").placeholder={
     chat:"Tulis apa saja…",think:"Ajukan masalah yang rumit…",
-    innovate:"Mau inovasi soal apa?",image:"Unggah gambar lalu tanyakan…",
+    innovate:"Mau inovasi soal apa?",image:"Jelaskan gambar yang mau dibuat, atau unggah gambar + perintah ubahnya…",
     code:"Jelaskan program yang kamu mau…",write:"Tempel teks atau minta tulisan baru…"
   }[MODE];
   if(MODE==="image"&&!pendingFiles.some(f=>f.kind==="image"))$("file").click();
@@ -546,6 +543,84 @@ function decorate(aiDiv, fullText){
   tools.querySelector(".cpyall").onclick=e=>copyText(fullText,e.currentTarget);
   aiDiv.appendChild(tools);
 }
+
+/* ---- pembuatan / pengubahan gambar ---- */
+const IMAGE_MODELS={gemini:"gemini-3.1-flash-image", openrouter:"google/gemini-3-pro-image"};
+let lastGen=null; // gambar terakhir yang dihasilkan, untuk "ubah lagi..."
+let genCounter=1;
+function downloadDataUrl(dataUrl,filename){
+  const [meta,b64]=dataUrl.split(",");
+  const mime=meta.match(/data:(.*?);/)[1]||"image/png";
+  const bin=atob(b64),arr=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);
+  const blob=new Blob([arr],{type:mime});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);a.download=filename;
+  document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},800);
+}
+function renderGenImage(aiDiv,dataUrl,caption){
+  const w=document.createElement("div");
+  w.className="genwrap";
+  const name=`pgbrain-gambar-${genCounter++}.png`;
+  w.innerHTML=`<img class="genimg" src="${dataUrl}" alt="">
+    <div class="genactions">
+      <button class="tbtn gdl">⬇ Unduh ${name}</button>
+    </div>`;
+  w.querySelector(".gdl").onclick=()=>downloadDataUrl(dataUrl,name);
+  aiDiv.appendChild(w);
+}
+async function runImageGen(prompt,imgs,aiDiv){
+  if(PROVIDER==="groq"){
+    aiDiv.classList.add("err");
+    aiDiv.innerHTML=tagHtml()+"Groq belum mendukung pembuatan gambar. Buka panel ⚙ dan ganti penyedia ke <b>Gemini</b> (gratis) atau <b>OpenRouter</b>, lalu coba lagi.";
+    return;
+  }
+  // kalau tidak melampirkan gambar tapi ada hasil sebelumnya, lanjutkan mengedit hasil itu
+  if(!imgs.length && lastGen) imgs=[lastGen];
+  let text="",images=[];
+  if(PROVIDER==="gemini"){
+    const parts=imgs.map(im=>({inline_data:{mime_type:im.mime,data:im.b64}}));
+    parts.push({text:prompt});
+    const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${IMAGE_MODELS.gemini}:generateContent?key=${API_KEY}`,{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({contents:[{role:"user",parts}],
+        generationConfig:{responseModalities:["TEXT","IMAGE"]}})
+    });
+    if(!res.ok){const err=await res.json().catch(()=>({}));throw new Error(err.error?.message||`HTTP ${res.status}`)}
+    const data=await res.json();
+    for(const p of (data.candidates?.[0]?.content?.parts||[])){
+      if(p.text)text+=p.text;
+      const inl=p.inlineData||p.inline_data;
+      if(inl)images.push(`data:${inl.mimeType||inl.mime_type||"image/png"};base64,${inl.data}`);
+    }
+  }else{ // openrouter
+    const content=imgs.map(im=>({type:"image_url",image_url:{url:`data:${im.mime};base64,${im.b64}`}}));
+    content.push({type:"text",text:prompt});
+    const res=await fetch("https://openrouter.ai/api/v1/chat/completions",{
+      method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+API_KEY},
+      body:JSON.stringify({model:IMAGE_MODELS.openrouter,modalities:["image","text"],
+        messages:[{role:"user",content}]})
+    });
+    if(!res.ok){const err=await res.json().catch(()=>({}));throw new Error(err.error?.message||`HTTP ${res.status}`)}
+    const data=await res.json();
+    const msg=data.choices?.[0]?.message||{};
+    text=msg.content||"";
+    for(const im of (msg.images||[]))
+      if(im.image_url&&im.image_url.url)images.push(im.image_url.url);
+  }
+  aiDiv.innerHTML=tagHtml()+(text?md(text):"");
+  if(images.length){
+    images.forEach(u=>renderGenImage(aiDiv,u,""));
+    const [meta,b64]=images[0].split(",");
+    lastGen={mime:(meta.match(/data:(.*?);/)||[,"image/png"])[1],b64};
+  }else if(!text){
+    aiDiv.classList.add("err");
+    aiDiv.innerHTML=tagHtml()+"Tidak ada gambar yang dihasilkan. Coba perjelas perintahnya, atau permintaan ditolak kebijakan keamanan.";
+  }
+  history.push({role:"model",text:(text||"[gambar dihasilkan]"),imgs:null});
+  $("chat").scrollTop=$("chat").scrollHeight;
+}
 /* ---- format permintaan per penyedia ---- */
 function buildGeminiBody(){
   const contents=history.map(m=>{
@@ -596,6 +671,15 @@ async function sendMsg(){
   history.push({role:"user",text:userText,imgs});
 
   const aiDiv=addMsg("ai",`<span class="typing"><i></i><i></i><i></i></span>`);
+
+  if(MODE==="image"){
+    try{await runImageGen(userText,imgs,aiDiv)}
+    catch(e){aiDiv.classList.add("err");
+      aiDiv.innerHTML=tagHtml()+"⚠ "+esc(e.message)+"<br><small>Periksa API key/kuota, atau ganti penyedia di panel ⚙.</small>"}
+    busy=false;$("send").disabled=false;ta.focus();
+    return;
+  }
+
   let full="";
   const paint=()=>{aiDiv.innerHTML=tagHtml()+md(full);$("chat").scrollTop=$("chat").scrollHeight};
 
