@@ -351,6 +351,7 @@ textarea:focus{outline:none}
       <select id="provider" style="flex:1">
         <option value="gemini">Google Gemini · aistudio.google.com/apikey</option>
         <option value="openrouter">OpenRouter · openrouter.ai/keys (ada Gemini gratis)</option>
+        <option value="openai">OpenAI · platform.openai.com/api-keys</option>
         <option value="groq">Groq · console.groq.com/keys (paling ngebut)</option>
       </select>
     </div>
@@ -432,7 +433,8 @@ const CONFIG={
   KEYS:{
     gemini:"__KEY_GEMINI__",
     openrouter:"__KEY_OPENROUTER__",
-    groq:"__KEY_GROQ__"
+    groq:"__KEY_GROQ__",
+    openai:"__KEY_OPENAI__"
   },
   DEFAULT_PROVIDER:"__NEXA_PROVIDER__",   // opsional: gemini | openrouter | groq
   DEFAULT_MODEL:"__NEXA_MODEL__",         // opsional
@@ -449,7 +451,7 @@ const CONFIG={
 function sha256(ascii){function rr(v,a){return(v>>>a)|(v<<(32-a))}var mL=ascii.length*8,r="",words=[],aB,i,j,h=[],k=[],pC=0,isC={},c=2;for(;pC<64;c++){if(!isC[c]){for(i=0;i<313;i+=c)isC[i]=c;h[pC]=(Math.pow(c,.5)*4294967296)|0;k[pC++]=(Math.pow(c,1/3)*4294967296)|0}}ascii+="\x80";while(ascii.length%64-56)ascii+="\x00";for(i=0;i<ascii.length;i++){j=ascii.charCodeAt(i);if(j>>8)return"";words[i>>2]|=j<<((3-i)%4)*8}words[words.length]=(mL/4294967296)|0;words[words.length]=mL;for(j=0;j<words.length;){var w=words.slice(j,j+=16),oH=h;h=h.slice(0,8);for(i=0;i<64;i++){var w15=w[i-15],w2=w[i-2],a=h[0],e=h[4],t1=h[7]+(rr(e,6)^rr(e,11)^rr(e,25))+((e&h[5])^(~e&h[6]))+k[i]+(w[i]=(i<16)?w[i]:(w[i-16]+(rr(w15,7)^rr(w15,18)^(w15>>>3))+w[i-7]+(rr(w2,17)^rr(w2,19)^(w2>>>10)))|0),t2=(rr(a,2)^rr(a,13)^rr(a,22))+((a&h[1])^(a&h[2])^(h[1]&h[2]));h=[(t1+t2)|0].concat(h);h[4]=(h[4]+t1)|0}for(i=0;i<8;i++)h[i]=(h[i]+oH[i])|0}for(i=0;i<8;i++)for(j=3;j+1;j--){var b=(h[i]>>(j*8))&255;r+=((b>>4).toString(16))+((b&15).toString(16))}return r}
 
 function builtinKey(p){const k=CONFIG.KEYS[p];return (k && !k.startsWith("__"))?k:""}
-const hasBuiltin = ["gemini","openrouter","groq"].some(p=>builtinKey(p));
+const hasBuiltin = ["gemini","openrouter","openai","groq"].some(p=>builtinKey(p));
 function builtinWorker(){const w=CONFIG.WORKER_URL;return (w && !w.startsWith("__"))?w.replace(/\/$/,""):""}
 
 let API_KEY="", MODEL="", PROVIDER="gemini", MODE="chat";
@@ -511,6 +513,21 @@ const PROVIDERS={
       ["black-forest-labs/flux.2-flex","FLUX.2 Flex — jago teks & detail halus",["image"],"UBAH / EDIT GAMBAR","~8-15 dtk","≈$0.06/MP"],
       ["bytedance-seed/seedream-5-0-pro","Seedream 5.0 Pro — edit presisi, jaga wajah",["image"],"UBAH / EDIT GAMBAR","~10-20 dtk","≈$0.045"],
       ["google/gemini-3-pro-image","Nano Banana Pro — edit lokal & instruksi akurat",["image"],"UBAH / EDIT GAMBAR","~10-20 dtk","≈$0.13"]
+    ]
+  },
+  openai:{
+    label:"OpenAI",
+    keyUrl:"https://platform.openai.com/api-keys",
+    models:[
+      ["gpt-5.6","GPT-5.6 — flagship terbaru: penalaran & koding terkuat",["think","code","innovate"]],
+      ["gpt-5.5","GPT-5.5 — sangat kuat untuk tugas profesional",["think","code","write"]],
+      ["gpt-5.4","GPT-5.4 — serbaguna, knowledge work & analisis",["chat","write","innovate"]],
+      ["gpt-5.4-mini","GPT-5.4 mini — cepat & hemat untuk chat harian",["chat"]],
+      ["gpt-5.4-nano","GPT-5.4 nano — termurah, tanya-jawab ringan",["chat"]],
+      // ---- model gambar ----
+      ["gpt-image-2","GPT Image 2 — model gambar terbaru OpenAI",["image"],"BUAT GAMBAR BARU","~15-30 dtk","≈$0.17"],
+      ["gpt-image-1-mini","GPT Image 1 Mini — hemat & latensi rendah",["image"],"BUAT GAMBAR BARU","~8-15 dtk","≈$0.02"],
+      ["gpt-image-2","GPT Image 2 — edit & gabung gambar",["image"],"GABUNG / EDIT GAMBAR","~15-30 dtk","≈$0.17"]
     ]
   },
   groq:{
@@ -1260,6 +1277,30 @@ async function runImageGen(prompt,imgs,aiDiv){
       const inl=p.inlineData||p.inline_data;
       if(inl)images.push(`data:${inl.mimeType||inl.mime_type||"image/png"};base64,${inl.data}`);
     }
+  }else if(PROVIDER==="openai"){        // OpenAI langsung — Images API
+    const form=new FormData();
+    let res;
+    if(imgs.length){
+      // edit / gabung gambar → /images/edits (multipart)
+      form.append("model",useModel);
+      form.append("prompt",prompt);
+      for(const im of imgs){
+        const bin=Uint8Array.from(atob(im.b64),c=>c.charCodeAt(0));
+        form.append("image[]",new Blob([bin],{type:im.mime}),"acuan.png");
+      }
+      res=await fetch("https://api.openai.com/v1/images/edits",{
+        method:"POST",headers:{"Authorization":"Bearer "+API_KEY},body:form});
+    }else{
+      res=await fetch("https://api.openai.com/v1/images/generations",{
+        method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+API_KEY},
+        body:JSON.stringify({model:useModel,prompt:prompt,n:1})});
+    }
+    if(!res.ok){const err=await res.json().catch(()=>({}));throw new Error(err.error?.message||`HTTP ${res.status}`)}
+    const d=await res.json();
+    for(const it of (d.data||[])){
+      if(it.b64_json) images.push("data:image/png;base64,"+it.b64_json);
+      else if(it.url) images.push(it.url);
+    }
   }else{ // openrouter
     let data=null;
     const useChat = CHAT_IMAGE_MODELS.includes(useModel);
@@ -1436,9 +1477,9 @@ async function sendMsg(){
       headers={"Content-Type":"application/json"};
       body=buildGeminiBody();
     }else{
-      url=PROVIDER==="openrouter"
-        ?"https://openrouter.ai/api/v1/chat/completions"
-        :"https://api.groq.com/openai/v1/chat/completions";
+      url = PROVIDER==="openrouter" ? "https://openrouter.ai/api/v1/chat/completions"
+          : PROVIDER==="openai"     ? "https://api.openai.com/v1/chat/completions"
+          :                           "https://api.groq.com/openai/v1/chat/completions";
       headers={"Content-Type":"application/json","Authorization":"Bearer "+API_KEY};
       body=buildOpenAIBody();
     }
@@ -1520,7 +1561,7 @@ function tryLogin(){
     if(HISTORY_URL) loadChats();
     let p=CONFIG.DEFAULT_PROVIDER;
     if(p.startsWith("__")||!builtinKey(p))
-      p=["openrouter","gemini","groq"].find(x=>builtinKey(x));
+      p=["openrouter","openai","gemini","groq"].find(x=>builtinKey(x));
     activateProvider(p, CONFIG.DEFAULT_MODEL.startsWith("__")?null:CONFIG.DEFAULT_MODEL);
   }
   $("input").focus();
