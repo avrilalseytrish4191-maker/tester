@@ -972,7 +972,7 @@ function fillUpscaleModels(){
   sel.innerHTML=UPSCALE_MODELS.map((m,i)=>`<option value="${i}">${m[2]}</option>`).join("");
   UPSCALE_MODEL=UPSCALE_MODELS[0];
   refreshScaleButtons();
-  $("upscalebar").classList.toggle("show", MODE==="upscale" && !!API_KEY);
+  $("upscalebar").classList.toggle("show", MODE==="upscale");
 }
 $("upmodel").onchange=e=>{UPSCALE_MODEL=UPSCALE_MODELS[+e.target.value];refreshScaleButtons()};
 $("scalegroup").addEventListener("click",e=>{
@@ -1095,20 +1095,28 @@ const IMAGE_MODELS={
   groq:{}
 };
 function fillImageModels(){
-  const groups=IMAGE_MODELS[PROVIDER]||{};
-  const sel=$("imgmodel");
-  let first="";
-  sel.innerHTML=Object.keys(groups).map(g=>{
-    const opts=groups[g].map(m=>{
-      if(!first)first=m[0];
-      const price=m[3]?" · "+m[3]:"";
-      return `<option value="${m[0]}">${m[1]} · ⏱ ${m[2]||"?"}${price}</option>`;
-    }).join("");
-    return `<optgroup label="${g}">${opts}</optgroup>`;
-  }).join("");
+  const sel=$("imgmodel"); if(!sel)return;
+  const raw=IMAGE_MODELS[PROVIDER];
+  let first="", htmlOut="";
+  const optHtml=(m)=>{
+    if(!first)first=m[0];
+    const price=m[3]?" · "+m[3]:"";
+    return `<option value="${m[0]}">${m[1]} · ⏱ ${m[2]||"?"}${price}</option>`;
+  };
+  if(Array.isArray(raw)){                       // bentuk lama: array datar
+    htmlOut=raw.map(optHtml).join("");
+  }else if(raw && typeof raw==="object"){       // bentuk baru: dikelompokkan
+    htmlOut=Object.keys(raw).map(g=>
+      `<optgroup label="${g}">`+(raw[g]||[]).map(optHtml).join("")+`</optgroup>`
+    ).join("");
+  }
+  if(!htmlOut){                                  // fallback: jangan biarkan bar kosong
+    htmlOut=`<option value="">(tidak ada model gambar untuk penyedia ini)</option>`;
+  }
+  sel.innerHTML=htmlOut;
   IMAGE_MODEL=first;
-  const hasAny=Object.keys(groups).length>0;
-  $("imgbar").classList.toggle("show",MODE==="image"&&hasAny);
+  if(first) sel.value=first;
+  $("imgbar").classList.toggle("show", MODE==="image" && !!first);
 }
 $("imgmodel").onchange=e=>{IMAGE_MODEL=e.target.value};
 let lastGen=null; // gambar terakhir yang dihasilkan, untuk "ubah lagi..."
