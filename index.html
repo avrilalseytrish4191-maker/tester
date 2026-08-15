@@ -661,7 +661,7 @@ function currentChat(){return chats.find(c=>c.id===currentId);}
 
 function newChat(){
   currentId=null; history=[];
-  document.querySelectorAll(".chat .msg,.chat .genwrap").forEach(n=>n.remove());
+  $("chat").innerHTML="";   // bersihkan total: gelembung, msgrow, tombol unduh
   // pulihkan tampilan kosong
   if(!$("empty")){
     const e=document.createElement("div"); e.className="empty"; e.id="empty";
@@ -675,7 +675,7 @@ function newChat(){
 function openChat(id){
   const c=chats.find(x=>x.id===id); if(!c)return;
   currentId=id; history=[];
-  document.querySelectorAll(".chat .msg,.chat .genwrap,.empty").forEach(n=>n.remove());
+  $("chat").innerHTML="";   // bersihkan total sebelum memuat chat lain
   for(const m of (c.messages||[])){
     let box;
     if(m.role==="user"){
