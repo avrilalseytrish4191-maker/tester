@@ -75,6 +75,14 @@ header{display:flex;align-items:center;gap:12px;padding:14px 2px 10px;flex-shrin
 .imgbar{display:none;align-items:center;gap:10px;background:var(--ink2);border:1px solid var(--line);
   border-radius:12px;padding:8px 12px;margin-bottom:10px;flex-shrink:0;font:12px var(--mono);color:var(--dim)}
 .imgbar.show{display:flex}
+
+.scalegroup{display:inline-flex;gap:4px;flex-shrink:0}
+.scalebtn{background:var(--ink);border:1px solid var(--line);color:var(--dim);border-radius:8px;
+  padding:7px 12px;font:12px var(--mono);cursor:pointer}
+.scalebtn.active{background:linear-gradient(120deg,rgba(255,180,84,.2),rgba(95,212,196,.15));
+  border-color:var(--amber);color:var(--text)}
+.scalebtn:hover{border-color:var(--amber)}
+.scalebtn:disabled{opacity:.35;cursor:not-allowed}
 .imgbar select{flex:1;background:var(--ink);border:1px solid var(--line);border-radius:8px;
   padding:7px 10px;color:var(--text);font-size:13px;min-width:0}
 /* ===== Chat ===== */
@@ -282,6 +290,10 @@ textarea:focus{outline:none}
   <div class="imgbar" id="upscalebar">
     <span>🔍 Model:</span>
     <select id="upmodel"></select>
+    <span class="scalegroup" id="scalegroup">
+      <button class="scalebtn active" data-scale="2">2×</button>
+      <button class="scalebtn" data-scale="4">4×</button>
+    </span>
   </div>
 
   <div class="imgbar" id="imgbar">
@@ -696,13 +708,28 @@ const UPSCALE_MODELS=[
    "GFPGAN — khusus perbaikan & pertajam wajah",2,false]
 ];
 let UPSCALE_MODEL=UPSCALE_MODELS[0];
+let UPSCALE_SCALE=2;
+function refreshScaleButtons(){
+  // tombol skala hanya relevan utk model yg punya parameter scale (kolom [3] truthy)
+  const supportsScale=!!UPSCALE_MODEL[3];
+  document.querySelectorAll(".scalebtn").forEach(b=>{
+    b.disabled=!supportsScale;
+    b.classList.toggle("active", supportsScale && (+b.dataset.scale===UPSCALE_SCALE));
+  });
+  $("scalegroup").style.opacity=supportsScale?"1":".4";
+}
 function fillUpscaleModels(){
   const sel=$("upmodel");
   sel.innerHTML=UPSCALE_MODELS.map((m,i)=>`<option value="${i}">${m[2]}</option>`).join("");
   UPSCALE_MODEL=UPSCALE_MODELS[0];
+  refreshScaleButtons();
   $("upscalebar").classList.toggle("show", MODE==="upscale" && !!API_KEY);
 }
-$("upmodel").onchange=e=>{UPSCALE_MODEL=UPSCALE_MODELS[+e.target.value]};
+$("upmodel").onchange=e=>{UPSCALE_MODEL=UPSCALE_MODELS[+e.target.value];refreshScaleButtons()};
+$("scalegroup").addEventListener("click",e=>{
+  const b=e.target.closest(".scalebtn"); if(!b||b.disabled)return;
+  UPSCALE_SCALE=+b.dataset.scale; refreshScaleButtons();
+});
 $("workerurl").oninput=e=>{WORKER_URL=e.target.value.trim().replace(/\/$/,"")};
 
 async function runUpscale(imgs,aiDiv){
@@ -718,7 +745,7 @@ async function runUpscale(imgs,aiDiv){
   }
   const m=UPSCALE_MODEL;
   const input={image:`data:${imgs[0].mime};base64,${imgs[0].b64}`};
-  if(m[3]) input.scale=m[3];            // faktor perbesaran default model
+  if(m[3]) input.scale=UPSCALE_SCALE;   // faktor perbesaran pilihan pengguna (2× / 4×)
   if(m[4]) input.face_enhance=false;    // real-esrgan punya opsi wajah
   const res=await fetch(WORKER_URL,{
     method:"POST",headers:{"Content-Type":"application/json"},
@@ -729,7 +756,7 @@ async function runUpscale(imgs,aiDiv){
   let url=data.output;
   if(Array.isArray(url)) url=url[0];
   if(!url) throw new Error("Tidak ada hasil dari model.");
-  aiDiv.innerHTML=`<span class="tag">PGBrain · 🔍 ${m[0].split("/").pop()}</span>`;
+  aiDiv.innerHTML=`<span class="tag">PGBrain · 🔍 ${m[0].split("/").pop()}${m[3]?" · "+UPSCALE_SCALE+"×":""}</span>`;
   // tampilkan hasil (URL gambar) + tombol unduh
   const w=document.createElement("div"); w.className="genwrap";
   const name=`pgbrain-upscale-${genCounter++}.png`;
