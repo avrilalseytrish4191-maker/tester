@@ -135,6 +135,8 @@ header{display:flex;align-items:center;gap:12px;padding:14px 2px 10px;flex-shrin
   border-color:var(--amber);color:var(--text)}
 .scalebtn:hover{border-color:var(--amber)}
 .scalebtn:disabled{opacity:.35;cursor:not-allowed}
+
+.imgbar select option:disabled{color:var(--dim);font-size:11px;letter-spacing:1px}
 .imgbar select{flex:1;background:var(--ink);border:1px solid var(--line);border-radius:8px;
   padding:7px 10px;color:var(--text);font-size:13px;min-width:0}
 /* ===== Chat ===== */
@@ -358,22 +360,12 @@ textarea:focus{outline:none}
   </div>
 
   <div class="imgbar" id="modelbar">
-    <span>🧠 Model:</span>
+    <span id="modelbarlabel">🧠 Model:</span>
     <select id="textmodel"></select>
-  </div>
-
-  <div class="imgbar" id="upscalebar">
-    <span>🔍 Model:</span>
-    <select id="upmodel"></select>
     <span class="scalegroup" id="scalegroup">
       <button class="scalebtn active" data-scale="2">2×</button>
       <button class="scalebtn" data-scale="4">4×</button>
     </span>
-  </div>
-
-  <div class="imgbar" id="imgbar">
-    <span>🎨 Model gambar:</span>
-    <select id="imgmodel"></select>
   </div>
 
   <div class="chat" id="chat">
@@ -467,7 +459,12 @@ const PROVIDERS={
       ["gemini-3.1-pro","Gemini 3.1 Pro — penalaran terdalam, riset & dokumen raksasa",["think","innovate","code"]],
       ["gemini-3.6-flash","Gemini 3.6 Flash — serbaguna & cepat: koding, chat harian",["chat","code","innovate","write"]],
       ["gemini-3.5-flash-lite","Gemini 3.5 Flash-Lite — tercepat & termurah, tanya-jawab ringan",["chat"]],
-      ["gemini-2.5-pro","Gemini 2.5 Pro — penalaran kuat harga murah, tulisan rapi",["think","write"]]
+      ["gemini-2.5-pro","Gemini 2.5 Pro — penalaran kuat harga murah, tulisan rapi",["think","write"]],
+      // ---- model gambar (tag "image") ----
+      ["gemini-3.1-flash-image","Nano Banana 2 — cepat & hemat",["image"],"BUAT GAMBAR BARU","~5-8 dtk","≈$0.04"],
+      ["gemini-3-pro-image","Nano Banana Pro — kualitas tertinggi & teks rapi",["image"],"BUAT GAMBAR BARU","~10-20 dtk","≈$0.13"],
+      ["gemini-3-pro-image","Nano Banana Pro — gabung s/d 5 subjek konsisten",["image"],"GABUNG / EDIT GAMBAR","~10-20 dtk","≈$0.13"],
+      ["gemini-3.1-flash-image","Nano Banana 2 — edit cepat & murah",["image"],"GABUNG / EDIT GAMBAR","~5-8 dtk","≈$0.04"]
     ]
   },
   openrouter:{
@@ -479,7 +476,23 @@ const PROVIDERS={
       ["anthropic/claude-haiku-4.5","Claude Haiku 4.5 — cepat & hemat, chat harian",["chat"]],
       ["openai/gpt-5.1","GPT-5.1 — serbaguna premium: percakapan & ide",["chat","innovate","write"]],
       ["google/gemini-3.1-pro","Gemini 3.1 Pro — konteks terpanjang, baca dokumen/kode besar",["think","code"]],
-      ["deepseek/deepseek-v4-pro","DeepSeek V4 Pro — koding & matematika termurah",["code","think"]]
+      ["deepseek/deepseek-v4-pro","DeepSeek V4 Pro — koding & matematika termurah",["code","think"]],
+      // ---- model gambar (tag "image") ----
+      ["black-forest-labs/flux.2-klein-4b","FLUX.2 Klein 4B — tercepat & termurah",["image"],"BUAT GAMBAR BARU (hemat)","~2-5 dtk","≈$0.014/MP"],
+      ["bytedance-seed/seedream-5-0-lite","Seedream 5.0 Lite — cepat & hemat",["image"],"BUAT GAMBAR BARU (hemat)","~5-10 dtk","≈$0.035"],
+      ["black-forest-labs/flux.2-pro","FLUX.2 Pro — kualitas tinggi, harga sedang",["image"],"BUAT GAMBAR BARU (hemat)","~6-12 dtk","≈$0.03/MP"],
+      ["google/gemini-3-pro-image","Nano Banana Pro — kualitas tertinggi & teks rapi",["image"],"BUAT GAMBAR BARU (premium)","~10-20 dtk","≈$0.13"],
+      ["black-forest-labs/flux.2-max","FLUX.2 Max — top-tier Black Forest Labs",["image"],"BUAT GAMBAR BARU (premium)","~10-20 dtk","≈$0.07/MP"],
+      ["openai/gpt-image-2","GPT Image 2 (OpenAI) — model gambar murni",["image"],"BUAT GAMBAR BARU (premium)","~15-30 dtk","≈$0.17"],
+      ["x-ai/grok-imagine-image-2.0","Grok Imagine 2.0 — fotorealistis",["image"],"BUAT GAMBAR BARU (premium)","~8-15 dtk","≈$0.04"],
+      ["google/gemini-3-pro-image","Nano Banana Pro — gabung s/d 5 subjek konsisten",["image"],"GABUNG GAMBAR","~10-20 dtk","≈$0.13"],
+      ["bytedance-seed/seedream-5-0-pro","Seedream 5.0 Pro — jaga identitas & gabung rapi",["image"],"GABUNG GAMBAR","~10-20 dtk","≈$0.045"],
+      ["black-forest-labs/flux.2-pro","FLUX.2 Pro — multi-referensi s/d 10 gambar",["image"],"GABUNG GAMBAR","~6-12 dtk","≈$0.03/MP"],
+      ["openai/gpt-5.4-image-2","GPT-5.4 Image 2 (ChatGPT) — pintar ikuti instruksi gabung",["image"],"GABUNG GAMBAR","~15-30 dtk","≈$0.17"],
+      ["black-forest-labs/flux.2-klein-4b","FLUX.2 Klein 4B — edit kilat & termurah",["image"],"UBAH / EDIT GAMBAR","~2-5 dtk","≈$0.014/MP"],
+      ["black-forest-labs/flux.2-flex","FLUX.2 Flex — jago teks & detail halus",["image"],"UBAH / EDIT GAMBAR","~8-15 dtk","≈$0.06/MP"],
+      ["bytedance-seed/seedream-5-0-pro","Seedream 5.0 Pro — edit presisi, jaga wajah",["image"],"UBAH / EDIT GAMBAR","~10-20 dtk","≈$0.045"],
+      ["google/gemini-3-pro-image","Nano Banana Pro — edit lokal & instruksi akurat",["image"],"UBAH / EDIT GAMBAR","~10-20 dtk","≈$0.13"]
     ]
   },
   groq:{
@@ -505,19 +518,53 @@ function fillModels(){
   $("provhint").innerHTML=`Ambil API key di <a href="${p.keyUrl}" target="_blank" rel="noopener">${p.keyUrl.replace("https://","")}</a> , tempel di bawah, lalu hubungkan. Semua model berbayar per pemakaian — pastikan akun penyedia sudah diisi saldo/billing.`;
 }
 // pemilih model teks per mode
-function fillTextModels(){
-  const list=(MODE==="image")?[]:modelsFor(PROVIDER,MODE);
-  const sel=$("textmodel");
-  sel.innerHTML=list.map(m=>`<option value="${m[0]}">${m[1]}</option>`).join("");
-  if(list.length){
-    // pertahankan pilihan jika masih valid, jika tidak pakai yang pertama
-    if(!list.some(m=>m[0]===MODEL)) MODEL=list[0][0];
-    sel.value=MODEL;
-  }
-  $("modelbar").classList.toggle("show", MODE!=="image" && list.length>0 && !!API_KEY);
+// Satu daftar model untuk mode apa pun (teks / gambar / upscale)
+function currentModelList(){
+  if(MODE==="upscale")
+    return UPSCALE_MODELS.map(u=>({id:u.id,label:u.label,grup:u.grup,time:u.time,price:u.price,ref:u}));
+  return modelsFor(PROVIDER,MODE).map(m=>({id:m[0],label:m[1],grup:m[3]||"",time:m[4]||"",price:m[5]||"",ref:m}));
 }
+function fillModelBar(){
+  const sel=$("textmodel"); if(!sel)return;
+  const list=currentModelList();
+  const lbl={image:"🎨 Model gambar:",upscale:"🔍 Model upscale:"}[MODE]||"🧠 Model:";
+  $("modelbarlabel").textContent=lbl;
+
+  let out="",lastGrup=null,first=null;
+  for(const m of list){
+    if(m.grup && m.grup!==lastGrup){
+      // baris pemisah bergaris, tidak bisa dipilih
+      out+=`<option disabled>──────── ${m.grup} ────────</option>`;
+      lastGrup=m.grup;
+    }
+    if(!first)first=m;
+    const extra=[m.time,m.price].filter(Boolean).join(" · ");
+    out+=`<option value="${m.id}|${m.label}">${m.label}${extra?"  ·  "+extra:""}</option>`;
+  }
+  sel.innerHTML=out||`<option disabled>(tidak ada model untuk mode ini)</option>`;
+
+  if(first){ sel.value=first.id+"|"+first.label; applyModelChoice(first.id,first.label); }
+  // tombol skala hanya untuk mode upscale
+  $("scalegroup").style.display = (MODE==="upscale")?"inline-flex":"none";
+  if(MODE==="upscale") refreshScaleButtons();
+  $("modelbar").classList.toggle("show", list.length>0 && !!API_KEY);
+}
+// terapkan pilihan ke variabel yang tepat sesuai mode
+function applyModelChoice(id,label){
+  if(MODE==="image"){ IMAGE_MODEL=id; }
+  else if(MODE==="upscale"){
+    UPSCALE_MODEL=UPSCALE_MODELS.find(u=>u.id===id&&u.label===label)||UPSCALE_MODELS.find(u=>u.id===id)||UPSCALE_MODELS[0];
+    refreshScaleButtons();
+  }
+  else { MODEL=id; }
+}
+// alias supaya pemanggilan lama tetap jalan
+function fillTextModels(){fillModelBar();}
+function fillImageModels(){fillModelBar();}
+function fillUpscaleModels(){fillModelBar();}
 $("textmodel").onchange=e=>{
-  MODEL=e.target.value;
+  const [id,label]=e.target.value.split("|");
+  applyModelChoice(id,label||"");
   if(API_KEY)$("modelLabel").textContent=PROVIDERS[PROVIDER].label;
 };
 $("provider").onchange=e=>{
@@ -525,7 +572,7 @@ $("provider").onchange=e=>{
   if(builtinKey(p)) activateProvider(p,null);
   else {PROVIDER=p;fillModels();$("apikey").value="";API_KEY="";
     $("dot").classList.remove("on");$("modelLabel").textContent="butuh key";
-    $("modelbar").classList.remove("show");$("upscalebar").classList.remove("show");$("send").disabled=true;}
+    $("modelbar").classList.remove("show");$("send").disabled=true;}
 };
 fillModels();
 
@@ -946,18 +993,18 @@ let WORKER_URL=builtinWorker();
 // version id Replicate (bisa berubah; ganti bila perlu dari halaman model di replicate.com)
 // [endpoint fal.ai, (tak dipakai), deskripsi, skalaDidukung[], paramGambar, paramSkala]
 const UPSCALE_MODELS=[
-  ["fal-ai/esrgan","",
-   "Real-ESRGAN — serbaguna, cepat & murah (foto, gambar AI, screenshot)",[2,4],"image_url","scale"],
-  ["fal-ai/crystal-upscaler","",
-   "Crystal Upscaler — tajam untuk potret & detail wajah",[2],"image_url",null],
-  ["fal-ai/recraft/upscale/creative","",
-   "Recraft Creative — perbesar kreatif, tambah detail & tekstur",[2],"image_url",null]
+  {id:"fal-ai/esrgan",             label:"Real-ESRGAN — serbaguna, cepat & murah",
+   grup:"UPSCALE HEMAT", time:"~5-10 dtk", price:"≈$0.01", scales:[2,4], imgKey:"image_url", scaleKey:"scale"},
+  {id:"fal-ai/crystal-upscaler",   label:"Crystal Upscaler — tajam untuk potret & wajah",
+   grup:"UPSCALE PREMIUM", time:"~15-30 dtk", price:"≈$0.05", scales:[2], imgKey:"image_url", scaleKey:null},
+  {id:"fal-ai/recraft/upscale/creative", label:"Recraft Creative — perbesar kreatif, tambah detail",
+   grup:"UPSCALE PREMIUM", time:"~20-40 dtk", price:"≈$0.06", scales:[2], imgKey:"image_url", scaleKey:null}
 ];
 let UPSCALE_MODEL=UPSCALE_MODELS[0];
 let UPSCALE_SCALE=2;
 function refreshScaleButtons(){
-  const hasScale=!!UPSCALE_MODEL[5];      // model punya parameter skala?
-  const allowed=hasScale?(UPSCALE_MODEL[3]||[]):[];
+  const hasScale=!!(UPSCALE_MODEL&&UPSCALE_MODEL.scaleKey);
+  const allowed=hasScale?(UPSCALE_MODEL.scales||[]):[];
   if(hasScale && !allowed.includes(UPSCALE_SCALE)) UPSCALE_SCALE=allowed[0];
   document.querySelectorAll(".scalebtn").forEach(b=>{
     const s=+b.dataset.scale;
@@ -967,14 +1014,6 @@ function refreshScaleButtons(){
   });
   $("scalegroup").style.opacity=hasScale?"1":".4";
 }
-function fillUpscaleModels(){
-  const sel=$("upmodel");
-  sel.innerHTML=UPSCALE_MODELS.map((m,i)=>`<option value="${i}">${m[2]}</option>`).join("");
-  UPSCALE_MODEL=UPSCALE_MODELS[0];
-  refreshScaleButtons();
-  $("upscalebar").classList.toggle("show", MODE==="upscale");
-}
-$("upmodel").onchange=e=>{UPSCALE_MODEL=UPSCALE_MODELS[+e.target.value];refreshScaleButtons()};
 $("scalegroup").addEventListener("click",e=>{
   const b=e.target.closest(".scalebtn"); if(!b||b.disabled)return;
   UPSCALE_SCALE=+b.dataset.scale; refreshScaleButtons();
@@ -1023,21 +1062,21 @@ async function runUpscale(imgs,aiDiv){
     return;
   }
   const m=UPSCALE_MODEL;
-  const imgKey=m[4]||"image_url";
-  const scaleKey=m[5];                  // null bila model tak punya parameter skala
+  const imgKey=m.imgKey||"image_url";
+  const scaleKey=m.scaleKey;            // null bila model tak punya parameter skala
   const small=await shrinkImage(imgs[0].mime,imgs[0].b64);
   const input={}; input[imgKey]=`data:${small.mime};base64,${small.b64}`;
   if(scaleKey) input[scaleKey]=UPSCALE_SCALE;
   const res=await fetch(WORKER_URL,{
     method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({model:m[0],input})   // endpoint fal.ai
+    body:JSON.stringify({model:m.id,input})   // endpoint fal.ai
   });
   if(!res.ok){const err=await res.json().catch(()=>({}));throw new Error(err.error||`HTTP ${res.status}`)}
   const data=await res.json();
   let url=data.output;
   if(Array.isArray(url)) url=url[0];
   if(!url) throw new Error("Tidak ada hasil dari model.");
-  aiDiv.innerHTML=`<span class="tag">PGBrain · 🔍 ${m[0].split("/").pop()}${m[5]?" · "+UPSCALE_SCALE+"×":""}</span>`;
+  aiDiv.innerHTML=`<span class="tag">PGBrain · 🔍 ${m.id.split("/").pop()}${m.scaleKey?" · "+UPSCALE_SCALE+"×":""}</span>`;
   // tampilkan hasil (URL gambar) + tombol unduh
   const w=document.createElement("div"); w.className="genwrap";
   const name=`pgbrain-upscale-${genCounter++}.png`;
@@ -1054,71 +1093,7 @@ async function runUpscale(imgs,aiDiv){
 }
 
 /* ---- pembuatan / pengubahan gambar ---- */
-// Dikelompokkan per fungsi. Tiap model: [id, nama, estimasiWaktu, estimasiBiaya]
-// Dikelompokkan per fungsi. Tiap model: [id, nama, estimasiWaktu, estimasiBiaya]
-const IMAGE_MODELS={
-  gemini:{
-    "🎨 BUAT GAMBAR BARU":[
-      ["gemini-3.1-flash-image","Nano Banana 2 — cepat & hemat","~5-8 dtk","≈$0.04"],
-      ["gemini-3-pro-image","Nano Banana Pro — kualitas tertinggi","~10-20 dtk","≈$0.13"]
-    ],
-    "🖇 GABUNG / UBAH GAMBAR":[
-      ["gemini-3-pro-image","Nano Banana Pro — gabung s/d 5 subjek konsisten","~10-20 dtk","≈$0.13"],
-      ["gemini-3.1-flash-image","Nano Banana 2 — edit cepat & murah","~5-8 dtk","≈$0.04"]
-    ]
-  },
-  openrouter:{
-    "🎨 BUAT GAMBAR BARU (hemat)":[
-      ["black-forest-labs/flux.2-klein-4b","FLUX.2 Klein 4B — tercepat & termurah","~2-5 dtk","≈$0.014/MP"],
-      ["bytedance-seed/seedream-5-0-lite","Seedream 5.0 Lite — cepat & hemat","~5-10 dtk","≈$0.035"],
-      ["black-forest-labs/flux.2-pro","FLUX.2 Pro — kualitas tinggi, harga sedang","~6-12 dtk","≈$0.03/MP"]
-    ],
-    "🎨 BUAT GAMBAR BARU (premium)":[
-      ["google/gemini-3-pro-image","Nano Banana Pro — kualitas tertinggi & teks rapi","~10-20 dtk","≈$0.13"],
-      ["black-forest-labs/flux.2-max","FLUX.2 Max — top-tier Black Forest Labs","~10-20 dtk","≈$0.07/MP"],
-      ["openai/gpt-image-2","GPT Image 2 (OpenAI) — model gambar murni","~15-30 dtk","≈$0.17"],
-      ["x-ai/grok-imagine-image-2.0","Grok Imagine 2.0 — fotorealistis","~8-15 dtk","≈$0.04"]
-    ],
-    "🖇 GABUNG GAMBAR (multi-reference)":[
-      ["google/gemini-3-pro-image","Nano Banana Pro — gabung s/d 5 subjek konsisten","~10-20 dtk","≈$0.13"],
-      ["bytedance-seed/seedream-5-0-pro","Seedream 5.0 Pro — jaga identitas & gabung rapi","~10-20 dtk","≈$0.045"],
-      ["black-forest-labs/flux.2-pro","FLUX.2 Pro — multi-referensi s/d 10 gambar","~6-12 dtk","≈$0.03/MP"],
-      ["openai/gpt-5.4-image-2","GPT-5.4 Image 2 (ChatGPT) — pintar ikuti instruksi gabung","~15-30 dtk","≈$0.17"]
-    ],
-    "✏ UBAH / EDIT GAMBAR":[
-      ["black-forest-labs/flux.2-klein-4b","FLUX.2 Klein 4B — edit kilat & termurah","~2-5 dtk","≈$0.014/MP"],
-      ["black-forest-labs/flux.2-flex","FLUX.2 Flex — jago teks & detail halus","~8-15 dtk","≈$0.06/MP"],
-      ["bytedance-seed/seedream-5-0-pro","Seedream 5.0 Pro — edit presisi, jaga wajah","~10-20 dtk","≈$0.045"],
-      ["google/gemini-3-pro-image","Nano Banana Pro — edit lokal & instruksi akurat","~10-20 dtk","≈$0.13"]
-    ]
-  },
-  groq:{}
-};
-function fillImageModels(){
-  const sel=$("imgmodel"); if(!sel)return;
-  const raw=IMAGE_MODELS[PROVIDER];
-  let first="", htmlOut="";
-  const optHtml=(m)=>{
-    if(!first)first=m[0];
-    const price=m[3]?" · "+m[3]:"";
-    return `<option value="${m[0]}">${m[1]} · ⏱ ${m[2]||"?"}${price}</option>`;
-  };
-  if(Array.isArray(raw)){                       // bentuk lama: array datar
-    htmlOut=raw.map(optHtml).join("");
-  }else if(raw && typeof raw==="object"){       // bentuk baru: dikelompokkan
-    htmlOut=Object.keys(raw).map(g=>
-      `<optgroup label="${g}">`+(raw[g]||[]).map(optHtml).join("")+`</optgroup>`
-    ).join("");
-  }
-  if(!htmlOut){                                  // fallback: jangan biarkan bar kosong
-    htmlOut=`<option value="">(tidak ada model gambar untuk penyedia ini)</option>`;
-  }
-  sel.innerHTML=htmlOut;
-  IMAGE_MODEL=first;
-  if(first) sel.value=first;
-  $("imgbar").classList.toggle("show", MODE==="image" && !!first);
-}
-$("imgmodel").onchange=e=>{IMAGE_MODEL=e.target.value};
+// (model gambar kini menyatu di PROVIDERS dengan tag "image")
 let lastGen=null; // gambar terakhir yang dihasilkan, untuk "ubah lagi..."
 let genCounter=1;
 function downloadDataUrl(dataUrl,filename){
