@@ -29,6 +29,7 @@ jobs:
           KEY_GROQ: ${{ secrets.KEY_GROQ }}
           NEXA_PROVIDER: ${{ secrets.NEXA_PROVIDER }}
           NEXA_MODEL: ${{ secrets.NEXA_MODEL }}
+          WORKER_URL: ${{ secrets.WORKER_URL }}
         run: |
           $html = Get-Content index.html -Raw
           if ($env:KEY_GEMINI)     { $html = $html.Replace('__KEY_GEMINI__', $env:KEY_GEMINI) }
@@ -36,6 +37,7 @@ jobs:
           if ($env:KEY_GROQ)       { $html = $html.Replace('__KEY_GROQ__', $env:KEY_GROQ) }
           if ($env:NEXA_PROVIDER)  { $html = $html.Replace('__NEXA_PROVIDER__', $env:NEXA_PROVIDER) }
           if ($env:NEXA_MODEL)     { $html = $html.Replace('__NEXA_MODEL__', $env:NEXA_MODEL) }
+          if ($env:WORKER_URL)     { $html = $html.Replace('__WORKER_URL__', $env:WORKER_URL) }
           Set-Content index.html -Value $html -NoNewline
 
       - name: Build PGBrain.exe
