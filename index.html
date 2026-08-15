@@ -645,8 +645,17 @@ function openChat(id){
   currentId=id; history=[];
   document.querySelectorAll(".chat .msg,.chat .genwrap,.empty").forEach(n=>n.remove());
   for(const m of (c.messages||[])){
-    if(m.role==="user"){addMsg("user",esc(m.text||""),null,(m.text||""));history.push({role:"user",text:m.text,imgs:null});}
-    else{const d=addMsg("ai",md(m.text||""));history.push({role:"model",text:m.text,imgs:null});}
+    const thumbs=(m.imgs&&m.imgs.length)
+      ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">`
+        +m.imgs.map(u=>`<img src="${u}" style="max-height:220px;max-width:100%;border-radius:10px;border:1px solid var(--line);cursor:zoom-in" onclick="openLightbox('${u}','pgbrain-gambar.png')">`).join("")
+        +`</div>` : "";
+    if(m.role==="user"){
+      addMsg("user",thumbs+esc(m.text||""),null,(m.text||""));
+      history.push({role:"user",text:m.text,imgs:null});
+    }else{
+      addMsg("ai",thumbs+md(m.text||""));
+      history.push({role:"model",text:m.text,imgs:null});
+    }
   }
   renderChatList();
 }
@@ -654,7 +663,7 @@ function openChat(id){
 // simpan pesan ke chat aktif (buat chat baru bila belum ada)
 // role, text, targetId(opsional). Mengembalikan id chat tujuan.
 // targetId mengunci balasan AI ke chat asal, meski pengguna pindah tab.
-function recordMessage(role,text,targetId){
+function recordMessage(role,text,targetId,imgs){
   let c = targetId ? chats.find(x=>x.id===targetId) : currentChat();
   if(!c){
     c={id:uid(),title:(text||"Chat baru").slice(0,40),author:meName,pinned:false,archived:false,ts:Date.now(),messages:[]};
@@ -662,10 +671,31 @@ function recordMessage(role,text,targetId){
     // hanya pindahkan tampilan ke chat baru bila pengguna belum pindah ke tab lain
     if(!targetId && currentId===null) currentId=c.id;
   }
-  c.messages.push({role,text}); c.ts=Date.now();
+  const msg={role,text};
+  if(imgs&&imgs.length) msg.imgs=imgs;   // simpan gambar agar tetap ada saat chat dibuka lagi
+  c.messages.push(msg); c.ts=Date.now();
   if(c.messages.length===1) c.title=(text||"Chat baru").slice(0,40);
   saveChats(); renderChatList();
   return c.id;
+}
+
+// Kecilkan gambar untuk disimpan di history (hemat ruang penyimpanan tim).
+// URL http(s) disimpan apa adanya karena sudah ringan.
+async function imgsForHistory(list){
+  const out=[];
+  for(const im of (list||[])){
+    if(typeof im==="string"){
+      if(im.startsWith("http")){out.push(im);continue;}
+      const m=im.match(/^data:(.*?);base64,(.*)$/);
+      if(!m){out.push(im);continue;}
+      try{const s=await shrinkImage(m[1],m[2]);out.push(`data:${s.mime};base64,${s.b64}`);}
+      catch(_){out.push(im);}
+    }else if(im&&im.b64){
+      try{const s=await shrinkImage(im.mime,im.b64);out.push(`data:${s.mime};base64,${s.b64}`);}
+      catch(_){out.push(`data:${im.mime};base64,${im.b64}`);}
+    }
+  }
+  return out;
 }
 
 function renderChatList(){
@@ -1086,6 +1116,7 @@ async function runUpscale(imgs,aiDiv){
   w.innerHTML=`<img class="genimg" src="${url}" alt="" title="Klik untuk memperbesar">
     <div class="genactions"><button class="bigbtn gdl" title="Unduh">⬇</button></div>`;
   w.querySelector(".genimg").onclick=()=>openLightbox(url,name);
+  recordMessage("model","[hasil upscale]",null,[url]);   // simpan ke history
   w.querySelector(".gdl").onclick=async()=>{
     try{const r=await fetch(url);const b=await r.blob();const a=document.createElement("a");
       a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();
@@ -1227,6 +1258,8 @@ async function runImageGen(prompt,imgs,aiDiv){
   aiDiv.innerHTML=imTag+(text?md(text):"");
   if(images.length){
     images.forEach(u=>renderGenImage(aiDiv,u,""));
+    // simpan hasil gambar ke history chat
+    imgsForHistory(images).then(list=>recordMessage("model", text||"[gambar dihasilkan]", null, list));
     const [meta,b64]=images[0].split(",");
     lastGen={mime:(meta.match(/data:(.*?);/)||[,"image/png"])[1],b64};
   }else if(!text){
@@ -1234,6 +1267,7 @@ async function runImageGen(prompt,imgs,aiDiv){
     aiDiv.innerHTML=tagHtml()+"Tidak ada gambar yang dihasilkan. Coba perjelas perintahnya, atau permintaan ditolak kebijakan keamanan.";
   }
   history.push({role:"model",text:(text||"[gambar dihasilkan]"),imgs:null});
+  if(!images.length) recordMessage("model", text||"[tidak ada gambar]");
   scrollIfBottom();
 }
 /* ---- format permintaan per penyedia ---- */
@@ -1289,10 +1323,20 @@ async function sendMsg(){
     clearQuote();
   }
   const quoteHtml=q?`<div style="border-left:3px solid var(--amber);padding-left:8px;margin-bottom:6px;font-size:12px;color:var(--dim);white-space:pre-wrap">❝ ${esc(q.replace(/\s+/g," ").trim().slice(0,160))}${q.length>160?"…":""}</div>`:"";
-  const label=quoteHtml+esc(text||"")+(atts.length?`<div style="font:11px var(--mono);color:var(--dim);margin-top:6px">📎 ${atts.map(f=>esc(f.name)).join(", ")}</div>`:"");
-  addMsg("user",label||"(lampiran)",imgs[0]?imgs[0].url:null, (text||userText));
+  // tampilkan SEMUA gambar acuan yang dilampirkan (bukan cuma yang pertama)
+  const thumbs=imgs.length
+    ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">`
+      + imgs.map(im=>`<img src="${im.url}" style="max-height:180px;max-width:46%;object-fit:cover;border-radius:10px;border:1px solid var(--line);cursor:zoom-in" onclick="openLightbox('${im.url}','acuan.png')">`).join("")
+      + `</div>` : "";
+  const label=quoteHtml+thumbs+esc(text||"")+(atts.length?`<div style="font:11px var(--mono);color:var(--dim);margin-top:6px">📎 ${atts.map(f=>esc(f.name)).join(", ")}</div>`:"");
+  addMsg("user",label||"(lampiran)",null, (text||userText));
   history.push({role:"user",text:userText,imgs});
   const targetChatId = recordMessage("user", text||userText);
+  // simpan lampiran gambar ke history (dikecilkan dulu), tanpa menahan alur
+  if(imgs.length) imgsForHistory(imgs).then(list=>{
+    const c=chats.find(x=>x.id===targetChatId);
+    if(c&&c.messages.length){ c.messages[c.messages.length-1].imgs=list; saveChats(); }
+  });
 
   const aiDiv=addMsg("ai",`<span class="typing"><i></i><i></i><i></i></span>`);
 
