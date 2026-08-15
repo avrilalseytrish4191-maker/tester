@@ -71,6 +71,12 @@ header{display:flex;align-items:center;gap:12px;padding:14px 2px 10px;flex-shrin
 .chip{white-space:nowrap;background:var(--ink2);border:1px solid var(--line);color:var(--dim);border-radius:999px;padding:7px 14px;font-size:13px;cursor:pointer;transition:.15s}
 .chip.active{background:linear-gradient(120deg,rgba(255,180,84,.18),rgba(95,212,196,.14));border-color:var(--amber);color:var(--text)}
 
+
+.imgbar{display:none;align-items:center;gap:10px;background:var(--ink2);border:1px solid var(--line);
+  border-radius:12px;padding:8px 12px;margin-bottom:10px;flex-shrink:0;font:12px var(--mono);color:var(--dim)}
+.imgbar.show{display:flex}
+.imgbar select{flex:1;background:var(--ink);border:1px solid var(--line);border-radius:8px;
+  padding:7px 10px;color:var(--text);font-size:13px;min-width:0}
 /* ===== Chat ===== */
 .chat{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:14px;padding:6px 2px 16px;scroll-behavior:smooth}
 .empty{margin:auto;text-align:center;color:var(--dim)}
@@ -126,9 +132,25 @@ header{display:flex;align-items:center;gap:12px;padding:14px 2px 10px;flex-shrin
   border-radius:9px;padding:7px 14px;font-size:12.5px;cursor:pointer;display:inline-flex;gap:6px;align-items:center}
 .dlall:hover{border-color:var(--aqua)}
 
-.genwrap{margin-top:10px}
-.genwrap img.genimg{max-width:100%;width:auto;max-height:420px;border-radius:12px;border:1px solid var(--line);display:block}
-.genactions{display:flex;gap:8px;margin-top:8px;user-select:none;-webkit-user-select:none}
+.genwrap{margin-top:10px;display:flex;align-items:flex-start;gap:10px}
+.genwrap img.genimg{max-width:calc(100% - 66px);width:auto;max-height:420px;border-radius:12px;
+  border:1px solid var(--line);display:block;cursor:zoom-in;transition:filter .15s}
+.genwrap img.genimg:hover{filter:brightness(1.08)}
+.genactions{display:flex;flex-direction:column;gap:10px;user-select:none;-webkit-user-select:none}
+.bigbtn{width:52px;height:52px;border-radius:14px;background:var(--ink3);border:1px solid var(--line);
+  color:var(--text);font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;
+  transition:.15s}
+.bigbtn:hover{border-color:var(--amber);color:var(--amber);transform:translateY(-1px)}
+.bigbtn.ok{border-color:var(--aqua);color:var(--aqua)}
+/* lightbox pratinjau gambar */
+.lightbox{position:fixed;inset:0;z-index:60;background:rgba(5,9,18,.92);display:none;
+  align-items:center;justify-content:center;cursor:zoom-out}
+.lightbox.show{display:flex}
+.lightbox img{max-width:92vw;max-height:88vh;border-radius:12px;box-shadow:0 20px 80px rgba(0,0,0,.6)}
+.lightbox .lbclose{position:fixed;top:18px;right:22px;background:var(--ink3);border:1px solid var(--line);
+  color:var(--text);width:44px;height:44px;border-radius:12px;font-size:20px;cursor:pointer}
+.lightbox .lbclose:hover{border-color:var(--danger);color:var(--danger)}
+.lightbox .lbdl{position:fixed;bottom:22px;right:22px}
 /* ===== Composer ===== */
 .composer{flex-shrink:0;padding:10px 0 max(14px,env(safe-area-inset-bottom))}
 .filechips{display:none;flex-wrap:wrap;gap:8px;margin-bottom:8px}
@@ -176,6 +198,11 @@ textarea:focus{outline:none}
 <body>
 <div class="aurora"></div>
 <div class="dropzone" id="dropzone"><span>Lepaskan file di sini 📂</span></div>
+<div class="lightbox" id="lightbox">
+  <img id="lbimg" alt="">
+  <button class="lbclose" id="lbclose" title="Tutup">✕</button>
+  <button class="bigbtn lbdl" id="lbdl" title="Unduh gambar">⬇</button>
+</div>
 <div class="lock" id="lock">
   <div class="aurora2"></div>
   <div class="lockcard">
@@ -223,6 +250,11 @@ textarea:focus{outline:none}
     <button class="chip" data-mode="image">🎨 Buat / Ubah Gambar</button>
     <button class="chip" data-mode="code">⌨ Kode</button>
     <button class="chip" data-mode="write">✍ Penulis</button>
+  </div>
+
+  <div class="imgbar" id="imgbar">
+    <span>🎨 Model gambar:</span>
+    <select id="imgmodel"></select>
   </div>
 
   <div class="chat" id="chat">
@@ -324,6 +356,7 @@ const PROVIDERS={
 
 function fillModels(){
   const p=PROVIDERS[PROVIDER];
+  setTimeout(fillImageModels,0);
   $("model").innerHTML=p.groups.map(g=>
     `<optgroup label="${g[0]}">`+g[1].map(m=>`<option value="${m[0]}">${m[1]}</option>`).join("")+`</optgroup>`
   ).join("");
@@ -373,7 +406,7 @@ $("modes").addEventListener("click",e=>{
     innovate:"Mau inovasi soal apa?",image:"Jelaskan gambar yang mau dibuat, atau unggah gambar + perintah ubahnya…",
     code:"Jelaskan program yang kamu mau…",write:"Tempel teks atau minta tulisan baru…"
   }[MODE];
-  if(MODE==="image"&&!pendingFiles.some(f=>f.kind==="image"))$("file").click();
+  fillImageModels();
 });
 
 /* ---- lampiran universal: gambar + file kode/teks ---- */
@@ -545,7 +578,27 @@ function decorate(aiDiv, fullText){
 }
 
 /* ---- pembuatan / pengubahan gambar ---- */
-const IMAGE_MODELS={gemini:"gemini-3.1-flash-image", openrouter:"google/gemini-3-pro-image"};
+const IMAGE_MODELS={
+  gemini:[
+    ["gemini-3.1-flash-image","Nano Banana 2 (Google) — cepat & murah, terbaik untuk edit gambar"],
+    ["gemini-3-pro-image","Nano Banana Pro (Google) — kualitas tertinggi, jago teks dalam gambar"]
+  ],
+  openrouter:[
+    ["google/gemini-3-pro-image","Nano Banana Pro (Google) — kualitas tertinggi, jago teks dalam gambar"],
+    ["google/gemini-3.1-flash-image","Nano Banana 2 (Google) — cepat & murah, terbaik untuk edit"],
+    ["openai/gpt-image-1","GPT Image (OpenAI/ChatGPT) — teks akurat, latar transparan"]
+  ],
+  groq:[]
+};
+let IMAGE_MODEL="";
+function fillImageModels(){
+  const list=IMAGE_MODELS[PROVIDER]||[];
+  const sel=$("imgmodel");
+  sel.innerHTML=list.map(m=>`<option value="${m[0]}">${m[1]}</option>`).join("");
+  IMAGE_MODEL=list.length?list[0][0]:"";
+  $("imgbar").classList.toggle("show",MODE==="image"&&list.length>0);
+}
+$("imgmodel").onchange=e=>{IMAGE_MODEL=e.target.value};
 let lastGen=null; // gambar terakhir yang dihasilkan, untuk "ubah lagi..."
 let genCounter=1;
 function downloadDataUrl(dataUrl,filename){
@@ -559,15 +612,30 @@ function downloadDataUrl(dataUrl,filename){
   document.body.appendChild(a);a.click();
   setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},800);
 }
+let lbCurrent=null; // {url,name} yang sedang tampil di lightbox
+function openLightbox(dataUrl,name){
+  lbCurrent={url:dataUrl,name};
+  $("lbimg").src=dataUrl;
+  $("lightbox").classList.add("show");
+}
+$("lightbox").onclick=e=>{if(e.target.id!=="lbdl")$("lightbox").classList.remove("show")};
+$("lbclose").onclick=()=>$("lightbox").classList.remove("show");
+$("lbdl").onclick=e=>{e.stopPropagation();if(lbCurrent)downloadDataUrl(lbCurrent.url,lbCurrent.name)};
+document.addEventListener("keydown",e=>{if(e.key==="Escape")$("lightbox").classList.remove("show")});
+
 function renderGenImage(aiDiv,dataUrl,caption){
   const w=document.createElement("div");
   w.className="genwrap";
   const name=`pgbrain-gambar-${genCounter++}.png`;
-  w.innerHTML=`<img class="genimg" src="${dataUrl}" alt="">
+  w.innerHTML=`<img class="genimg" src="${dataUrl}" alt="" title="Klik untuk memperbesar">
     <div class="genactions">
-      <button class="tbtn gdl">⬇ Unduh ${name}</button>
+      <button class="bigbtn gdl" title="Unduh ${name}">⬇</button>
     </div>`;
-  w.querySelector(".gdl").onclick=()=>downloadDataUrl(dataUrl,name);
+  w.querySelector(".genimg").onclick=()=>openLightbox(dataUrl,name);
+  const btn=w.querySelector(".gdl");
+  btn.onclick=()=>{downloadDataUrl(dataUrl,name);
+    btn.classList.add("ok");btn.textContent="✓";
+    setTimeout(()=>{btn.classList.remove("ok");btn.textContent="⬇"},1500)};
   aiDiv.appendChild(w);
 }
 async function runImageGen(prompt,imgs,aiDiv){
@@ -582,7 +650,7 @@ async function runImageGen(prompt,imgs,aiDiv){
   if(PROVIDER==="gemini"){
     const parts=imgs.map(im=>({inline_data:{mime_type:im.mime,data:im.b64}}));
     parts.push({text:prompt});
-    const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${IMAGE_MODELS.gemini}:generateContent?key=${API_KEY}`,{
+    const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${IMAGE_MODEL}:generateContent?key=${API_KEY}`,{
       method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({contents:[{role:"user",parts}],
         generationConfig:{responseModalities:["TEXT","IMAGE"]}})
@@ -599,7 +667,7 @@ async function runImageGen(prompt,imgs,aiDiv){
     content.push({type:"text",text:prompt});
     const res=await fetch("https://openrouter.ai/api/v1/chat/completions",{
       method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+API_KEY},
-      body:JSON.stringify({model:IMAGE_MODELS.openrouter,modalities:["image","text"],
+      body:JSON.stringify({model:IMAGE_MODEL,modalities:["image","text"],
         messages:[{role:"user",content}]})
     });
     if(!res.ok){const err=await res.json().catch(()=>({}));throw new Error(err.error?.message||`HTTP ${res.status}`)}
@@ -609,7 +677,8 @@ async function runImageGen(prompt,imgs,aiDiv){
     for(const im of (msg.images||[]))
       if(im.image_url&&im.image_url.url)images.push(im.image_url.url);
   }
-  aiDiv.innerHTML=tagHtml()+(text?md(text):"");
+  const imTag=`<span class="tag">PGBrain · 🎨 ${IMAGE_MODEL.split("/").pop()}</span>`;
+  aiDiv.innerHTML=imTag+(text?md(text):"");
   if(images.length){
     images.forEach(u=>renderGenImage(aiDiv,u,""));
     const [meta,b64]=images[0].split(",");
