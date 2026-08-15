@@ -439,6 +439,8 @@ function builtinWorker(){const w=CONFIG.WORKER_URL;return (w && !w.startsWith("_
 
 let API_KEY="", MODEL="", PROVIDER="gemini", MODE="chat";
 let IMAGE_MODEL="";   // model gambar terpilih (mode 🎨)
+// model gambar OpenAI yang HARUS lewat jalur chat/completions (bukan Image API)
+const CHAT_IMAGE_MODELS=["openai/gpt-5.4-image-2","openai/gpt-5-image","openai/gpt-5-image-mini"];
 let history=[];            // riwayat netral: {role:"user"|"model", text, img:{mime,b64}|null}
 let pendingFiles=[];   // {kind:"image"|"text", name, ...}
 let pendingQuote=null; // teks jawaban AI yang sedang dikutip
