@@ -438,6 +438,7 @@ const hasBuiltin = ["gemini","openrouter","groq"].some(p=>builtinKey(p));
 function builtinWorker(){const w=CONFIG.WORKER_URL;return (w && !w.startsWith("__"))?w.replace(/\/$/,""):""}
 
 let API_KEY="", MODEL="", PROVIDER="gemini", MODE="chat";
+let IMAGE_MODEL="";   // model gambar terpilih (mode 🎨)
 let history=[];            // riwayat netral: {role:"user"|"model", text, img:{mime,b64}|null}
 let pendingFiles=[];   // {kind:"image"|"text", name, ...}
 let pendingQuote=null; // teks jawaban AI yang sedang dikutip
