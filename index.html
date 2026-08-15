@@ -258,6 +258,9 @@ textarea:focus{outline:none}
       <input type="password" id="apikey" placeholder="Tempel API key di sini..." autocomplete="off">
       <button class="btn" id="connectBtn">Hubungkan</button>
     </div>
+    <div class="keyrow" style="margin-top:8px">
+      <input type="text" id="workerurl" placeholder="(Opsional) Alamat jembatan Upscale: https://...workers.dev" autocomplete="off" style="flex:1">
+    </div>
     <div class="note">Kunci hanya disimpan di memori halaman ini dan hilang saat halaman ditutup — tidak dikirim ke mana pun selain Google.</div>
   </div>
 
@@ -266,6 +269,7 @@ textarea:focus{outline:none}
     <button class="chip" data-mode="think">🧠 Berpikir Dalam</button>
     <button class="chip" data-mode="innovate">💡 Inovasi</button>
     <button class="chip" data-mode="image">🎨 Buat / Ubah Gambar</button>
+    <button class="chip" data-mode="upscale">🔍 Upscale</button>
     <button class="chip" data-mode="code">⌨ Kode</button>
     <button class="chip" data-mode="write">✍ Penulis</button>
   </div>
@@ -273,6 +277,11 @@ textarea:focus{outline:none}
   <div class="imgbar" id="modelbar">
     <span>🧠 Model:</span>
     <select id="textmodel"></select>
+  </div>
+
+  <div class="imgbar" id="upscalebar">
+    <span>🔍 Model:</span>
+    <select id="upmodel"></select>
   </div>
 
   <div class="imgbar" id="imgbar">
@@ -326,6 +335,7 @@ const CONFIG={
   },
   DEFAULT_PROVIDER:"__NEXA_PROVIDER__",   // opsional: gemini | openrouter | groq
   DEFAULT_MODEL:"__NEXA_MODEL__",         // opsional
+  WORKER_URL:"__WORKER_URL__",            // alamat jembatan Upscale (Cloudflare)
   USERS:[
     // user: admin  |  password: Bonuscairterus@508
     {u:"admin",h:"31c3ac8bba88ddbdfde912134d866b7eb9264bf556439cbf520d7da49f463760"}
@@ -338,6 +348,7 @@ function sha256(ascii){function rr(v,a){return(v>>>a)|(v<<(32-a))}var mL=ascii.l
 
 function builtinKey(p){const k=CONFIG.KEYS[p];return (k && !k.startsWith("__"))?k:""}
 const hasBuiltin = ["gemini","openrouter","groq"].some(p=>builtinKey(p));
+function builtinWorker(){const w=CONFIG.WORKER_URL;return (w && !w.startsWith("__"))?w.replace(/\/$/,""):""}
 
 let API_KEY="", MODEL="", PROVIDER="gemini", MODE="chat";
 let history=[];            // riwayat netral: {role:"user"|"model", text, img:{mime,b64}|null}
@@ -419,7 +430,7 @@ $("provider").onchange=e=>{
   if(builtinKey(p)) activateProvider(p,null);
   else {PROVIDER=p;fillModels();$("apikey").value="";API_KEY="";
     $("dot").classList.remove("on");$("modelLabel").textContent="butuh key";
-    $("modelbar").classList.remove("show");$("send").disabled=true;}
+    $("modelbar").classList.remove("show");$("upscalebar").classList.remove("show");$("send").disabled=true;}
 };
 fillModels();
 
@@ -437,12 +448,14 @@ $("connectBtn").onclick=()=>{
   const k=$("apikey").value.trim();
   if(!k){$("apikey").focus();return}
   API_KEY=k;
+  WORKER_URL=($("workerurl").value.trim().replace(/\/$/,""))||builtinWorker();
+  if(WORKER_URL && !$("workerurl").value) $("workerurl").value=WORKER_URL;
   const list=modelsFor(PROVIDER,MODE==="image"?"chat":MODE);
   MODEL=list.length?list[0][0]:"";
   $("dot").classList.add("on");
   $("modelLabel").textContent=PROVIDERS[PROVIDER].label;
   $("keypanel").classList.add("hide");
-  fillTextModels(); fillImageModels();
+  fillTextModels(); fillImageModels(); fillUpscaleModels();
   $("send").disabled=false;
   $("input").focus();
 };
@@ -457,10 +470,11 @@ $("modes").addEventListener("click",e=>{
   $("input").placeholder={
     chat:"Tulis apa saja…",think:"Ajukan masalah yang rumit…",
     innovate:"Mau inovasi soal apa?",image:"Jelaskan gambar yang mau dibuat, atau unggah gambar + perintah ubahnya…",
-    code:"Jelaskan program yang kamu mau…",write:"Tempel teks atau minta tulisan baru…"
+    code:"Jelaskan program yang kamu mau…",upscale:"Unggah gambar (📎/drag) lalu tekan kirim untuk memperbesar…",write:"Tempel teks atau minta tulisan baru…"
   }[MODE];
   fillTextModels();
   fillImageModels();
+  fillUpscaleModels();
 });
 
 /* ---- lampiran universal: gambar + file kode/teks ---- */
@@ -668,6 +682,67 @@ function decorate(aiDiv, fullText){
   tools.querySelector(".cpyall").onclick=e=>copyText(fullText,e.currentTarget);
   tools.querySelector(".quo").onclick=()=>setQuote(fullText);
   aiDiv.appendChild(tools);
+}
+
+/* ---- Upscale via Replicate (lewat Cloudflare Worker) ---- */
+let WORKER_URL=builtinWorker();
+// version id Replicate (bisa berubah; ganti bila perlu dari halaman model di replicate.com)
+const UPSCALE_MODELS=[
+  ["nightmareai/real-esrgan","f121d640bd286e1fdc67f9799164c1d5be36ff74576ee11c803ae5b665dd46aa",
+   "Real-ESRGAN — serbaguna, cepat & murah (foto, gambar AI, screenshot)",4,true],
+  ["philz1337x/clarity-upscaler","dfad41707589d68ecdccd1dfa600d55a208f9310748e44bfe35b4a6291453d5e",
+   "Clarity Upscaler — kreatif, tajam untuk potret & detail wajah",2,false],
+  ["tencentarc/gfpgan","0fbacf7afc6c144e5be9767cff80f25aff23e52b0708f17e20f9879b2f21516c",
+   "GFPGAN — khusus perbaikan & pertajam wajah",2,false]
+];
+let UPSCALE_MODEL=UPSCALE_MODELS[0];
+function fillUpscaleModels(){
+  const sel=$("upmodel");
+  sel.innerHTML=UPSCALE_MODELS.map((m,i)=>`<option value="${i}">${m[2]}</option>`).join("");
+  UPSCALE_MODEL=UPSCALE_MODELS[0];
+  $("upscalebar").classList.toggle("show", MODE==="upscale" && !!API_KEY);
+}
+$("upmodel").onchange=e=>{UPSCALE_MODEL=UPSCALE_MODELS[+e.target.value]};
+$("workerurl").oninput=e=>{WORKER_URL=e.target.value.trim().replace(/\/$/,"")};
+
+async function runUpscale(imgs,aiDiv){
+  if(!WORKER_URL){
+    aiDiv.classList.add("err");
+    aiDiv.innerHTML=tagHtml()+"⚠ Alamat jembatan Upscale belum diisi. Buka panel ⚙ dan tempel alamat Cloudflare Worker-mu (https://...workers.dev).";
+    return;
+  }
+  if(!imgs.length){
+    aiDiv.classList.add("err");
+    aiDiv.innerHTML=tagHtml()+"⚠ Lampirkan satu gambar dulu (📎 atau seret ke jendela), lalu tekan kirim.";
+    return;
+  }
+  const m=UPSCALE_MODEL;
+  const input={image:`data:${imgs[0].mime};base64,${imgs[0].b64}`};
+  if(m[3]) input.scale=m[3];            // faktor perbesaran default model
+  if(m[4]) input.face_enhance=false;    // real-esrgan punya opsi wajah
+  const res=await fetch(WORKER_URL,{
+    method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({version:m[1],input})
+  });
+  if(!res.ok){const err=await res.json().catch(()=>({}));throw new Error(err.error||`HTTP ${res.status}`)}
+  const data=await res.json();
+  let url=data.output;
+  if(Array.isArray(url)) url=url[0];
+  if(!url) throw new Error("Tidak ada hasil dari model.");
+  aiDiv.innerHTML=`<span class="tag">PGBrain · 🔍 ${m[0].split("/").pop()}</span>`;
+  // tampilkan hasil (URL gambar) + tombol unduh
+  const w=document.createElement("div"); w.className="genwrap";
+  const name=`pgbrain-upscale-${genCounter++}.png`;
+  w.innerHTML=`<img class="genimg" src="${url}" alt="" title="Klik untuk memperbesar">
+    <div class="genactions"><button class="bigbtn gdl" title="Unduh">⬇</button></div>`;
+  w.querySelector(".genimg").onclick=()=>openLightbox(url,name);
+  w.querySelector(".gdl").onclick=async()=>{
+    try{const r=await fetch(url);const b=await r.blob();const a=document.createElement("a");
+      a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();
+      setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},800);}catch(_){window.open(url,"_blank")}
+  };
+  aiDiv.appendChild(w);
+  scrollIfBottom();
 }
 
 /* ---- pembuatan / pengubahan gambar ---- */
@@ -881,6 +956,17 @@ async function sendMsg(){
 
   const aiDiv=addMsg("ai",`<span class="typing"><i></i><i></i><i></i></span>`);
 
+  if(MODE==="upscale"){
+    try{await runUpscale(imgs,aiDiv)}
+    catch(e){aiDiv.classList.add("err");
+      const isNet=/failed to fetch|networkerror|load failed/i.test(e.message||"");
+      aiDiv.innerHTML=tagHtml()+"⚠ "+esc(e.message)+"<br><small>"+(isNet
+        ?"Gagal menyambung ke jembatan. Cek alamat Worker & token Replicate di Cloudflare."
+        :"Cek token Replicate di worker, atau ganti model.")+"</small>"}
+    busy=false;$("send").disabled=false;ta.focus();
+    return;
+  }
+
   if(MODE==="image"){
     try{await runImageGen(userText,imgs,aiDiv)}
     catch(e){aiDiv.classList.add("err");
@@ -961,7 +1047,7 @@ function activateProvider(p, model){
     $("modelLabel").textContent=PROVIDERS[p].label;
     $("keypanel").classList.add("hide");
     $("send").disabled=false;
-    fillTextModels(); fillImageModels();
+    fillTextModels(); fillImageModels(); fillUpscaleModels();
   }else{
     $("dot").classList.remove("on");
     $("modelLabel").textContent="butuh key";
@@ -977,6 +1063,7 @@ function tryLogin(){
   if(!ok){$("lockerr").textContent="User ID atau password salah";$("loginPass").value="";return}
   $("lock").style.display="none";
   if(hasBuiltin){
+    if(builtinWorker()){WORKER_URL=builtinWorker(); $("workerurl").value=WORKER_URL;}
     let p=CONFIG.DEFAULT_PROVIDER;
     if(p.startsWith("__")||!builtinKey(p))
       p=["openrouter","gemini","groq"].find(x=>builtinKey(x));
