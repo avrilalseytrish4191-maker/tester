@@ -38,7 +38,59 @@ body{
 @keyframes drift{to{transform:translateX(6%) translateY(4%)}}
 @media (prefers-reduced-motion:reduce){.aurora{animation:none}}
 
-.app{position:relative;z-index:1;display:flex;flex-direction:column;height:100dvh;max-width:880px;margin:0 auto;padding:0 14px}
+
+.shell{display:flex;height:100dvh;overflow:hidden}
+.sidebar{width:270px;flex-shrink:0;background:var(--ink2);border-right:1px solid var(--line);
+  display:flex;flex-direction:column;transition:width .18s ease;overflow:hidden}
+.sidebar.collapsed{width:56px}
+.sbhead{display:flex;align-items:center;gap:8px;padding:14px 12px 10px}
+.sbtoggle,.sbopen{background:none;border:1px solid var(--line);color:var(--dim);
+  width:36px;height:36px;border-radius:10px;cursor:pointer;font-size:15px;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center}
+.sbtoggle:hover,.sbopen:hover{border-color:var(--amber);color:var(--amber)}
+.sbtitle{font-size:13px;font-weight:700;letter-spacing:.5px;margin-right:auto;white-space:nowrap;color:var(--text)}
+.newchat{display:flex;align-items:center;gap:10px;margin:2px 10px 12px;padding:11px 14px;
+  background:linear-gradient(120deg,rgba(255,180,84,.16),rgba(95,212,196,.12));
+  border:1px solid var(--line);border-radius:12px;color:var(--text);cursor:pointer;
+  font-size:13.5px;font-weight:600;width:calc(100% - 20px);transition:.15s}
+.newchat:hover{border-color:var(--amber)}
+.newchat .plus{width:22px;height:22px;border-radius:50%;background:var(--amber);color:#241505;
+  display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;flex-shrink:0}
+.sidebar.collapsed .sbtitle,.sidebar.collapsed .newchat .lbl,
+.sidebar.collapsed .sblist,.sidebar.collapsed .sbfoot{display:none}
+.sidebar.collapsed .newchat{width:36px;padding:7px;justify-content:center;margin:2px 10px 12px}
+.sblist{flex:1;overflow-y:auto;padding:4px 8px;scrollbar-width:thin}
+.sbsection{font:10px var(--mono);color:var(--dim);letter-spacing:1.5px;text-transform:uppercase;
+  padding:14px 8px 6px;font-weight:600}
+.chatitem{display:flex;align-items:center;gap:11px;padding:9px 10px;border-radius:10px;cursor:pointer;
+  position:relative;transition:background .12s}
+.chatitem:hover{background:var(--ink3)}
+.chatitem.active{background:var(--ink3)}
+.chatitem .dot0{width:9px;height:9px;border-radius:50%;border:1.5px solid var(--dim);flex-shrink:0;transition:.12s}
+.chatitem:hover .dot0{border-color:var(--amber)}
+.chatitem.active .dot0{background:var(--amber);border-color:var(--amber)}
+.chatitem.pinned .dot0{background:var(--aqua);border-color:var(--aqua)}
+.chatitem .ttl{flex:1;min-width:0;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
+.chatitem .dots{background:none;border:none;color:var(--dim);cursor:pointer;font-size:17px;
+  padding:0 2px;flex-shrink:0;opacity:0;line-height:1;border-radius:6px;transition:.12s}
+.chatitem:hover .dots{opacity:1}
+.chatitem .dots:hover{color:var(--amber)}
+.sbfoot{padding:10px 14px;border-top:1px solid var(--line);font:10px var(--mono);color:var(--dim);
+  display:flex;align-items:center;gap:7px}
+.sbfoot::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--aqua);flex-shrink:0}
+.sbopen{display:none;margin-right:8px}
+.ctxmenu{position:fixed;z-index:70;background:var(--ink2);border:1px solid var(--line);border-radius:11px;
+  padding:5px;min-width:170px;box-shadow:0 12px 34px rgba(0,0,0,.55)}
+.ctxmenu button{display:flex;align-items:center;gap:9px;width:100%;background:none;border:none;
+  color:var(--text);padding:9px 11px;border-radius:8px;cursor:pointer;font-size:13px;text-align:left}
+.ctxmenu button:hover{background:var(--ink3)}
+.ctxmenu button.danger{color:var(--danger)}
+@media(max-width:640px){
+  .sidebar{position:fixed;left:0;top:0;bottom:0;z-index:45;box-shadow:0 0 40px rgba(0,0,0,.6)}
+  .sidebar.collapsed{width:0;border:none}
+  .sbopen{display:flex}
+}
+.app{position:relative;z-index:1;display:flex;flex-direction:column;height:100dvh;flex:1;min-width:0;max-width:880px;margin:0 auto;padding:0 14px}
 
 /* ===== Header ===== */
 header{display:flex;align-items:center;gap:12px;padding:14px 2px 10px;flex-shrink:0}
@@ -254,8 +306,22 @@ textarea:focus{outline:none}
   </div>
 </div>
 
+<div class="shell">
+<aside class="sidebar" id="sidebar">
+  <div class="sbhead">
+    <button class="sbtoggle" id="sbtoggle" title="Ciutkan/Lebarkan">☰</button>
+    <span class="sbtitle">History Tim</span>
+  </div>
+  <button class="newchat" id="newchat" title="Chat baru">
+    <span class="plus">＋</span><span class="lbl">Chat Baru</span>
+  </button>
+  <div class="sblist" id="sblist"></div>
+  <div class="sbfoot" id="sbsync">tersambung…</div>
+</aside>
+
 <div class="app">
   <header>
+    <button class="sbopen" id="sbopen" title="Buka history">☰</button>
     <div class="logo"><b>PGBrain</b><span>multi ai core</span></div>
     <div class="status"><span class="dot" id="dot"></span><span id="modelLabel">offline</span></div>
     <button class="gear" id="gearBtn">⚙ Kunci</button>
@@ -341,6 +407,8 @@ textarea:focus{outline:none}
   </div>
 </div>
 
+</div><!-- /shell -->
+
 <script>
 "use strict";
 const $=id=>document.getElementById(id);
@@ -362,6 +430,7 @@ const CONFIG={
   DEFAULT_PROVIDER:"__NEXA_PROVIDER__",   // opsional: gemini | openrouter | groq
   DEFAULT_MODEL:"__NEXA_MODEL__",         // opsional
   WORKER_URL:"__WORKER_URL__",            // alamat jembatan Upscale (Cloudflare)
+  HISTORY_URL:"__HISTORY_URL__",          // alamat worker History Tim (Cloudflare)
   USERS:[
     // user: admin  |  password: Bonuscairterus@508
     {u:"admin",h:"31c3ac8bba88ddbdfde912134d866b7eb9264bf556439cbf520d7da49f463760"}
@@ -469,6 +538,139 @@ const SYSTEMS={
   write:"Kamu adalah PGBrain mode Penulis. Bantu menulis, menyunting, dan memperbagus teks dalam bahasa Indonesia yang mengalir dan enak dibaca. Sesuaikan gaya dengan permintaan."
 };
 
+/* ================= HISTORY TIM ================= */
+let HISTORY_URL = (CONFIG.HISTORY_URL && !CONFIG.HISTORY_URL.startsWith("__")) ? CONFIG.HISTORY_URL.replace(/\/$/,"") : "";
+let chats = [];           // [{id,title,author,pinned,archived,ts,messages:[...]}]
+let currentId = null;     // id chat yang sedang dibuka
+let meName = "anggota";   // nama pembuat (dari user login)
+
+function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
+
+async function loadChats(){
+  if(!HISTORY_URL){$("sbsync").textContent="history lokal (tak tersambung)"; chats=JSON.parse(localStorage_getItem()||"[]"); renderChatList(); return;}
+  try{
+    const r=await fetch(HISTORY_URL,{method:"GET"});
+    const d=await r.json();
+    chats=Array.isArray(d.chats)?d.chats:[];
+    $("sbsync").textContent="tersinkron • "+chats.length+" chat";
+  }catch(e){ $("sbsync").textContent="gagal sinkron"; chats=[]; }
+  renderChatList();
+}
+// fallback penyimpanan lokal via variabel memori (artifact tak izinkan localStorage)
+let _localMem="[]";
+function localStorage_getItem(){return _localMem;}
+function localStorage_setItem(v){_localMem=v;}
+
+let saveTimer=null;
+function saveChats(){
+  // debounce agar tidak spam server
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(async()=>{
+    if(!HISTORY_URL){localStorage_setItem(JSON.stringify(chats));return;}
+    try{
+      await fetch(HISTORY_URL,{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({chats})});
+      $("sbsync").textContent="tersinkron • "+chats.length+" chat";
+    }catch(e){$("sbsync").textContent="gagal simpan";}
+  },600);
+}
+
+function currentChat(){return chats.find(c=>c.id===currentId);}
+
+function newChat(){
+  currentId=null; history=[];
+  document.querySelectorAll(".chat .msg,.chat .genwrap").forEach(n=>n.remove());
+  // pulihkan tampilan kosong
+  if(!$("empty")){
+    const e=document.createElement("div"); e.className="empty"; e.id="empty";
+    e.innerHTML='<div class="big">PGBrain</div><p>Mulai percakapan baru.</p>';
+    $("chat").appendChild(e);
+  }
+  renderChatList();
+  $("input")&&$("input").focus();
+}
+
+function openChat(id){
+  const c=chats.find(x=>x.id===id); if(!c)return;
+  currentId=id; history=[];
+  document.querySelectorAll(".chat .msg,.chat .genwrap,.empty").forEach(n=>n.remove());
+  for(const m of (c.messages||[])){
+    if(m.role==="user"){addMsg("user",esc(m.text||""),null,(m.text||""));history.push({role:"user",text:m.text,imgs:null});}
+    else{const d=addMsg("ai",md(m.text||""));history.push({role:"model",text:m.text,imgs:null});}
+  }
+  renderChatList();
+}
+
+// simpan pesan ke chat aktif (buat chat baru bila belum ada)
+function recordMessage(role,text){
+  let c=currentChat();
+  if(!c){
+    c={id:uid(),title:(text||"Chat baru").slice(0,40),author:meName,pinned:false,archived:false,ts:Date.now(),messages:[]};
+    chats.unshift(c); currentId=c.id;
+  }
+  c.messages.push({role,text}); c.ts=Date.now();
+  if(c.messages.length===1) c.title=(text||"Chat baru").slice(0,40);
+  saveChats(); renderChatList();
+}
+
+function renderChatList(){
+  const list=$("sblist"); if(!list)return;
+  list.innerHTML="";
+  const active=chats.filter(c=>!c.archived);
+  const pinned=active.filter(c=>c.pinned).sort((a,b)=>b.ts-a.ts);
+  const normal=active.filter(c=>!c.pinned).sort((a,b)=>b.ts-a.ts);
+  const archived=chats.filter(c=>c.archived).sort((a,b)=>b.ts-a.ts);
+  const add=(arr,label)=>{
+    if(!arr.length)return;
+    const h=document.createElement("div"); h.className="sbsection"; h.textContent=label; list.appendChild(h);
+    arr.forEach(c=>list.appendChild(chatRow(c)));
+  };
+  add(pinned,"📌 Disematkan");
+  add(normal,"Chat");
+  add(archived,"🗄 Arsip");
+  if(!chats.length){const e=document.createElement("div");e.className="sbsection";e.textContent="Belum ada chat";list.appendChild(e);}
+}
+
+function chatRow(c){
+  const el=document.createElement("div");
+  el.className="chatitem"+(c.id===currentId?" active":"")+(c.pinned?" pinned":"");
+  el.innerHTML=`<span class="dot0"></span>`
+    +`<span class="ttl" title="${esc(c.title)}">${esc(c.title)}</span>`
+    +`<button class="dots" title="Opsi">⋮</button>`;
+  el.querySelector(".ttl").onclick=()=>openChat(c.id);
+  el.querySelector(".dots").onclick=(e)=>{e.stopPropagation();openMenu(e.currentTarget,c);};
+  return el;
+}
+
+function openMenu(anchor,c){
+  document.querySelectorAll(".ctxmenu").forEach(m=>m.remove());
+  const m=document.createElement("div"); m.className="ctxmenu";
+  m.innerHTML=`
+    <button class="mpin">${c.pinned?"📌 Lepas sematan":"📌 Sematkan"}</button>
+    <button class="marc">${c.archived?"🗄 Keluarkan dari arsip":"🗄 Arsipkan"}</button>
+    <button class="mdel danger">🗑 Hapus</button>`;
+  document.body.appendChild(m);
+  const r=anchor.getBoundingClientRect();
+  m.style.top=(r.bottom+4)+"px";
+  m.style.left=Math.min(r.left, window.innerWidth-170)+"px";
+  m.querySelector(".mpin").onclick=()=>{c.pinned=!c.pinned;saveChats();renderChatList();m.remove();};
+  m.querySelector(".marc").onclick=()=>{c.archived=!c.archived;saveChats();renderChatList();m.remove();};
+  m.querySelector(".mdel").onclick=()=>{
+    if(confirm("Hapus chat \""+c.title+"\"? Ini menghapus untuk semua anggota tim.")){
+      chats=chats.filter(x=>x.id!==c.id);
+      if(currentId===c.id) newChat();
+      saveChats();renderChatList();
+    }
+    m.remove();
+  };
+  setTimeout(()=>document.addEventListener("click",function h(){m.remove();document.removeEventListener("click",h);}),0);
+}
+
+// tombol sidebar
+$("sbtoggle").onclick=()=>$("sidebar").classList.toggle("collapsed");
+$("sbopen")&&($("sbopen").onclick=()=>$("sidebar").classList.toggle("collapsed"));
+$("newchat").onclick=newChat;
+
 /* ---- koneksi ---- */
 $("connectBtn").onclick=()=>{
   const k=$("apikey").value.trim();
@@ -484,6 +686,7 @@ $("connectBtn").onclick=()=>{
   fillTextModels(); fillImageModels(); fillUpscaleModels();
   $("send").disabled=false;
   $("input").focus();
+  if(HISTORY_URL) loadChats();
 };
 $("gearBtn").onclick=()=>$("keypanel").classList.toggle("hide");
 
@@ -1053,6 +1256,7 @@ async function sendMsg(){
   const label=quoteHtml+esc(text||"")+(atts.length?`<div style="font:11px var(--mono);color:var(--dim);margin-top:6px">📎 ${atts.map(f=>esc(f.name)).join(", ")}</div>`:"");
   addMsg("user",label||"(lampiran)",imgs[0]?imgs[0].url:null, (text||userText));
   history.push({role:"user",text:userText,imgs});
+  recordMessage("user", text||userText);
 
   const aiDiv=addMsg("ai",`<span class="typing"><i></i><i></i><i></i></span>`);
 
@@ -1125,7 +1329,7 @@ async function sendMsg(){
       }
     }
     if(!full){aiDiv.classList.add("err");aiDiv.innerHTML="Tidak ada respons. Permintaan mungkin ditolak kebijakan keamanan penyedia — coba ubah kalimatnya, atau ganti model di panel ⚙."}
-    else {history.push({role:"model",text:full,imgs:null});decorate(aiDiv,full);}
+    else {history.push({role:"model",text:full,imgs:null});decorate(aiDiv,full);recordMessage("model",full);}
   }catch(e){
     aiDiv.classList.add("err");
     aiDiv.innerHTML="⚠ "+esc(e.message)+"<br><small>Periksa API key, kuota harian, atau koneksi internet. Coba juga ganti model/penyedia di panel ⚙.</small>";
@@ -1162,8 +1366,10 @@ function tryLogin(){
   const ok=CONFIG.USERS.some(x=>x.u===u && x.h===sha256(p));
   if(!ok){$("lockerr").textContent="User ID atau password salah";$("loginPass").value="";return}
   $("lock").style.display="none";
+  meName=($("loginUser").value.trim()||"anggota");
   if(hasBuiltin){
     if(builtinWorker()){WORKER_URL=builtinWorker(); $("workerurl").value=WORKER_URL;}
+    if(HISTORY_URL) loadChats();
     let p=CONFIG.DEFAULT_PROVIDER;
     if(p.startsWith("__")||!builtinKey(p))
       p=["openrouter","gemini","groq"].find(x=>builtinKey(x));
