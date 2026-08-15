@@ -136,7 +136,8 @@ header{display:flex;align-items:center;gap:12px;padding:14px 2px 10px;flex-shrin
 .genwrap img.genimg{max-width:calc(100% - 66px);width:auto;max-height:420px;border-radius:12px;
   border:1px solid var(--line);display:block;cursor:zoom-in;transition:filter .15s}
 .genwrap img.genimg:hover{filter:brightness(1.08)}
-.genactions{display:flex;flex-direction:column;gap:10px;user-select:none;-webkit-user-select:none}
+.genwrap{align-items:center}
+.genactions{display:flex;flex-direction:column;gap:10px;justify-content:center;align-self:center;user-select:none;-webkit-user-select:none}
 .bigbtn{width:52px;height:52px;border-radius:14px;background:var(--ink3);border:1px solid var(--line);
   color:var(--text);font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;
   transition:.15s}
@@ -580,13 +581,14 @@ function decorate(aiDiv, fullText){
 /* ---- pembuatan / pengubahan gambar ---- */
 const IMAGE_MODELS={
   gemini:[
-    ["gemini-3.1-flash-image","Nano Banana 2 (Google) — cepat & murah, terbaik untuk edit gambar"],
-    ["gemini-3-pro-image","Nano Banana Pro (Google) — kualitas tertinggi, jago teks dalam gambar"]
+    ["gemini-3-pro-image","Nano Banana Pro (Google) — kualitas tertinggi, jago teks dalam gambar"],
+    ["gemini-3.1-flash-image","Nano Banana 2 (Google) — cepat & murah, terbaik untuk edit"]
   ],
   openrouter:[
-    ["google/gemini-3-pro-image","Nano Banana Pro (Google) — kualitas tertinggi, jago teks dalam gambar"],
-    ["google/gemini-3.1-flash-image","Nano Banana 2 (Google) — cepat & murah, terbaik untuk edit"],
-    ["openai/gpt-image-1","GPT Image (OpenAI/ChatGPT) — teks akurat, latar transparan"]
+    ["google/gemini-3-pro-image","Nano Banana Pro (Google) — terbaru, kualitas tertinggi & teks rapi"],
+    ["openai/gpt-5.4-image-2","GPT-5.4 Image 2 (OpenAI) — terbaru dari ChatGPT, instruksi & teks akurat"],
+    ["google/gemini-3.1-flash-image","Nano Banana 2 (Google) — versi lama, cepat & hemat"],
+    ["openai/gpt-image-1","GPT Image 1 (OpenAI) — versi lama, latar transparan"]
   ],
   groq:[]
 };
@@ -639,21 +641,30 @@ function renderGenImage(aiDiv,dataUrl,caption){
   aiDiv.appendChild(w);
 }
 async function runImageGen(prompt,imgs,aiDiv){
+  const useModel=IMAGE_MODEL;            // kunci: agar label & panggilan konsisten
+  const seed=Math.floor(Math.random()*1e9); // variasi tiap generate ulang
   if(PROVIDER==="groq"){
     aiDiv.classList.add("err");
     aiDiv.innerHTML=tagHtml()+"Groq belum mendukung pembuatan gambar. Buka panel ⚙ dan ganti penyedia ke <b>Gemini</b> (gratis) atau <b>OpenRouter</b>, lalu coba lagi.";
     return;
   }
-  // kalau tidak melampirkan gambar tapi ada hasil sebelumnya, lanjutkan mengedit hasil itu
-  if(!imgs.length && lastGen) imgs=[lastGen];
+  // Tentukan: edit gambar sebelumnya, atau buat gambar baru?
+  // - Kalau pengguna melampirkan gambar -> edit gambar itu.
+  // - Kalau tidak, dan kalimatnya berupa PERINTAH UBAH + ada hasil sebelumnya -> edit hasil itu.
+  // - Selain itu -> buat gambar baru dari nol.
+  const editRe=/\b(ubah|rubah|ganti|gantilah|ubahlah|edit|perbaiki|sesuaikan|jadikan|jadikanlah|tambah|tambahkan|tambahi|hapus|hilangkan|buang|kurangi|warnai|potong|crop|perbesar|perkecil|geser|pindah|buat(lah)? jadi|jadi(kan)?|ubah jadi|remove|add|change|replace|make it|turn into|edit)\b/i;
+  const refersPrev=/\b(gambar|foto|itu|tadi|tersebut|ini|sebelumnya|hasil|di ?atas)\b/i;
+  const isEdit = imgs.length>0 || (lastGen && editRe.test(prompt) && refersPrev.test(prompt));
+  if(!imgs.length && isEdit && lastGen) imgs=[lastGen];
+  if(!isEdit) imgs=[]; // permintaan baru: jangan bawa gambar lama
   let text="",images=[];
   if(PROVIDER==="gemini"){
     const parts=imgs.map(im=>({inline_data:{mime_type:im.mime,data:im.b64}}));
     parts.push({text:prompt});
-    const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${IMAGE_MODEL}:generateContent?key=${API_KEY}`,{
+    const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${useModel}:generateContent?key=${API_KEY}`,{
       method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({contents:[{role:"user",parts}],
-        generationConfig:{responseModalities:["TEXT","IMAGE"]}})
+        generationConfig:{responseModalities:["TEXT","IMAGE"],seed}})
     });
     if(!res.ok){const err=await res.json().catch(()=>({}));throw new Error(err.error?.message||`HTTP ${res.status}`)}
     const data=await res.json();
@@ -664,20 +675,28 @@ async function runImageGen(prompt,imgs,aiDiv){
     }
   }else{ // openrouter
     const content=imgs.map(im=>({type:"image_url",image_url:{url:`data:${im.mime};base64,${im.b64}`}}));
-    content.push({type:"text",text:prompt});
+    content.push({type:"text",text:prompt+`\n\n(variation seed: ${seed})`});
     const res=await fetch("https://openrouter.ai/api/v1/chat/completions",{
       method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+API_KEY},
-      body:JSON.stringify({model:IMAGE_MODEL,modalities:["image","text"],
+      body:JSON.stringify({model:useModel,modalities:["image","text"],
         messages:[{role:"user",content}]})
     });
     if(!res.ok){const err=await res.json().catch(()=>({}));throw new Error(err.error?.message||`HTTP ${res.status}`)}
     const data=await res.json();
     const msg=data.choices?.[0]?.message||{};
-    text=msg.content||"";
+    text=(typeof msg.content==="string")?msg.content:"";
+    // format A: message.images[].image_url.url
     for(const im of (msg.images||[]))
       if(im.image_url&&im.image_url.url)images.push(im.image_url.url);
+    // format B: content array berisi image_url
+    if(Array.isArray(msg.content))
+      for(const c of msg.content){
+        if(c.type==="output_image"&&c.image_url)images.push(c.image_url);
+        if(c.type==="image_url"&&c.image_url?.url)images.push(c.image_url.url);
+        if(c.type==="text")text+=c.text||"";
+      }
   }
-  const imTag=`<span class="tag">PGBrain · 🎨 ${IMAGE_MODEL.split("/").pop()}</span>`;
+  const imTag=`<span class="tag">PGBrain · 🎨 ${useModel.split("/").pop()}</span>`;
   aiDiv.innerHTML=imTag+(text?md(text):"");
   if(images.length){
     images.forEach(u=>renderGenImage(aiDiv,u,""));
