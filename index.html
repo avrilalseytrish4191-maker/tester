@@ -93,6 +93,8 @@ header{display:flex;align-items:center;gap:12px;padding:14px 2px 10px;flex-shrin
 .msg.err{border-color:var(--danger);color:var(--danger)}
 
 .msg,.msg *{user-select:text;-webkit-user-select:text}
+
+.msg.user .msgtools{justify-content:flex-end}
 .msgtools{display:flex;gap:6px;margin-top:8px;user-select:none;-webkit-user-select:none}
 .tbtn{background:var(--ink);border:1px solid var(--line);color:var(--dim);border-radius:8px;padding:4px 10px;font:11px var(--mono);cursor:pointer;display:inline-flex;align-items:center;gap:5px}
 .tbtn:hover{border-color:var(--amber);color:var(--text)}
@@ -153,13 +155,21 @@ header{display:flex;align-items:center;gap:12px;padding:14px 2px 10px;flex-shrin
 .lightbox .lbclose:hover{border-color:var(--danger);color:var(--danger)}
 .lightbox .lbdl{position:fixed;bottom:22px;right:22px}
 
-.jumpdown{position:absolute;right:34px;bottom:96px;z-index:20;width:44px;height:44px;border-radius:50%;
+.jumpdown{position:absolute;right:40px;bottom:120px;z-index:20;width:44px;height:44px;border-radius:50%;
   background:var(--ink3);border:1px solid var(--line);color:var(--text);font-size:20px;cursor:pointer;
   display:none;align-items:center;justify-content:center;box-shadow:0 6px 20px rgba(0,0,0,.4);
   transition:transform .12s,border-color .15s}
 .jumpdown.show{display:flex}
 .jumpdown:hover{border-color:var(--amber);color:var(--amber);transform:translateY(-2px)}
-@media(max-width:520px){.jumpdown{bottom:104px;right:28px}}
+@media(max-width:520px){.jumpdown{bottom:128px;right:32px}}
+
+.quotebar{display:none;align-items:center;gap:10px;margin-bottom:8px;padding:8px 12px;
+  background:var(--ink2);border:1px solid var(--line);border-left:3px solid var(--amber);
+  border-radius:10px;font-size:13px;color:var(--dim)}
+.quotebar.show{display:flex}
+.quotebar .qicon{color:var(--amber);font-size:16px;flex-shrink:0}
+.quotebar .qtext{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
+.quotebar .qx{background:none;border:none;color:var(--danger);cursor:pointer;font-size:15px;flex-shrink:0}
 /* ===== Composer ===== */
 .composer{flex-shrink:0;padding:10px 0 max(14px,env(safe-area-inset-bottom))}
 .filechips{display:none;flex-wrap:wrap;gap:8px;margin-bottom:8px}
@@ -280,6 +290,11 @@ textarea:focus{outline:none}
   <button class="jumpdown" id="jumpdown" title="Ke pesan terbaru">↓</button>
 
   <div class="composer">
+    <div class="quotebar" id="quotebar">
+      <span class="qicon">❝</span>
+      <span class="qtext" id="quotetext"></span>
+      <button class="qx" id="quoteclear" title="Batalkan kutipan">✕</button>
+    </div>
     <div class="filechips" id="filechips"></div>
     <div class="inputrow">
       <button class="icon" id="attach" title="Lampirkan file (gambar / kode / teks)">📎</button>
@@ -327,6 +342,15 @@ const hasBuiltin = ["gemini","openrouter","groq"].some(p=>builtinKey(p));
 let API_KEY="", MODEL="", PROVIDER="gemini", MODE="chat";
 let history=[];            // riwayat netral: {role:"user"|"model", text, img:{mime,b64}|null}
 let pendingFiles=[];   // {kind:"image"|"text", name, ...}
+let pendingQuote=null; // teks jawaban AI yang sedang dikutip
+function setQuote(text){
+  pendingQuote=text;
+  const oneLine=text.replace(/\s+/g," ").trim();
+  $("quotetext").textContent=oneLine.length>120?oneLine.slice(0,120)+"…":oneLine;
+  $("quotebar").classList.add("show");
+  $("input").focus();
+}
+function clearQuote(){pendingQuote=null;$("quotebar").classList.remove("show");}
 let busy=false;
 
 const PROVIDERS={
@@ -491,6 +515,7 @@ ta.addEventListener("keydown",e=>{
   if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendMsg()}
 });
 $("send").onclick=sendMsg;
+$("quoteclear").onclick=clearQuote;
 
 /* ---- auto-scroll pintar: hanya menempel ke bawah bila pengguna sedang di bawah ---- */
 let stickBottom=true;
@@ -530,11 +555,19 @@ function md(s){
   return s;
 }
 function tagHtml(){return `<span class="tag">PGBrain · ${PROVIDERS[PROVIDER].label}</span>`}
-function addMsg(role,html,imgUrl){
+function addMsg(role,html,imgUrl,quoteSource){
   $("empty")&&$("empty").remove();
   const d=document.createElement("div");
   d.className="msg "+role;
   d.innerHTML=(role==="ai"?tagHtml():"")+(imgUrl?`<img src="${imgUrl}" alt="">`:"")+html;
+  // pesan pengguna juga bisa dikutip
+  if(role==="user" && quoteSource){
+    const tools=document.createElement("div");
+    tools.className="msgtools";
+    tools.innerHTML=`<button class="tbtn quo">❝ Kutip</button>`;
+    tools.querySelector(".quo").onclick=()=>setQuote(quoteSource);
+    d.appendChild(tools);
+  }
   $("chat").appendChild(d);
   stickBottom=true;                 // kirim/terima pesan baru = ikuti ke bawah
   $("chat").scrollTop=$("chat").scrollHeight;
@@ -627,11 +660,13 @@ function decorate(aiDiv, fullText){
     }
     aiDiv.appendChild(fc);
   }
-  // 3) tombol salin seluruh jawaban
+  // 3) tombol salin + kutip jawaban
   const tools=document.createElement("div");
   tools.className="msgtools";
-  tools.innerHTML=`<button class="tbtn cpyall">⧉ Salin jawaban</button>`;
+  tools.innerHTML=`<button class="tbtn cpyall">⧉ Salin jawaban</button>`
+    +`<button class="tbtn quo">❝ Kutip</button>`;
   tools.querySelector(".cpyall").onclick=e=>copyText(fullText,e.currentTarget);
+  tools.querySelector(".quo").onclick=()=>setQuote(fullText);
   aiDiv.appendChild(tools);
 }
 
@@ -832,8 +867,16 @@ async function sendMsg(){
       userText+=`\n\n=== ${t.name} ===\n\`\`\`\n${t.content}\n\`\`\``;
     userText+="\n\nJika pengguna meminta perubahan, balas dengan file LENGKAP hasil perubahan di dalam blok kode markdown (\`\`\`), bukan potongan.";
   }
-  const label=esc(text||"")+(atts.length?`<div style="font:11px var(--mono);color:var(--dim);margin-top:6px">📎 ${atts.map(f=>esc(f.name)).join(", ")}</div>`:"");
-  addMsg("user",label||"(lampiran)",imgs[0]?imgs[0].url:null);
+  // sisipkan kutipan (jika ada) sebagai konteks untuk AI
+  const q=pendingQuote; if(q){
+    userText="Mengacu pada bagian ini dari jawabanmu sebelumnya:\n\n> "
+      + q.replace(/\n/g,"\n> ")
+      + "\n\n"+ (text||"Tolong bahas/lanjutkan bagian di atas.");
+    clearQuote();
+  }
+  const quoteHtml=q?`<div style="border-left:3px solid var(--amber);padding-left:8px;margin-bottom:6px;font-size:12px;color:var(--dim);white-space:pre-wrap">❝ ${esc(q.replace(/\s+/g," ").trim().slice(0,160))}${q.length>160?"…":""}</div>`:"";
+  const label=quoteHtml+esc(text||"")+(atts.length?`<div style="font:11px var(--mono);color:var(--dim);margin-top:6px">📎 ${atts.map(f=>esc(f.name)).join(", ")}</div>`:"");
+  addMsg("user",label||"(lampiran)",imgs[0]?imgs[0].url:null, (text||userText));
   history.push({role:"user",text:userText,imgs});
 
   const aiDiv=addMsg("ai",`<span class="typing"><i></i><i></i><i></i></span>`);
