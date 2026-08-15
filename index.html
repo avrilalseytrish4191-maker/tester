@@ -202,9 +202,15 @@ header{display:flex;align-items:center;gap:12px;padding:14px 2px 10px;flex-shrin
   flex-shrink:0;transition:.15s}
 .smallbtn:hover{border-color:var(--amber);color:var(--amber)}
 .smallbtn.ok{border-color:var(--aqua);color:var(--aqua)}
-.storedwrap{display:inline-flex;align-items:center;gap:8px;margin-bottom:10px;width:fit-content;max-width:100%}
+.storedwrap{margin:6px 0;width:fit-content;max-width:100%}
 .storedwrap img{max-height:240px;max-width:100%;border-radius:10px;border:1px solid var(--line);cursor:zoom-in;display:block}
-.storedwrap .smallbtn{width:30px;height:30px;font-size:14px;border-radius:8px}
+/* gelembung berisi gambar menyusut mengikuti isinya */
+.msg.hasimg{width:fit-content;max-width:100%}
+/* baris: gelembung + tombol unduh DI LUAR kotak */
+.msgrow{display:flex;align-items:center;gap:10px;align-self:flex-start;max-width:92%}
+.msgrow.user{align-self:flex-end;flex-direction:row-reverse}
+.msgrow .dlcol{display:flex;flex-direction:column;gap:6px;flex-shrink:0}
+.msgrow .smallbtn{width:32px;height:32px;font-size:14px;border-radius:9px}
 .genwrap{margin-top:10px;display:flex;align-items:flex-start;gap:10px}
 .genwrap img.genimg{max-width:calc(100% - 66px);width:auto;max-height:420px;border-radius:12px;
   border:1px solid var(--line);display:block;cursor:zoom-in;transition:filter .15s}
@@ -893,16 +899,34 @@ async function downloadAnyImage(url,filename,btn){
 }
 // Pasang gambar tersimpan + tombol unduh kecil ke sebuah gelembung pesan
 function attachStoredImages(box,imgs){
-  (imgs||[]).forEach((u,i)=>{
+  box.classList.add("hasimg");
+  // buang teks penanda otomatis supaya kotak tidak melebar percuma
+  [...box.childNodes].forEach(n=>{
+    if(n.nodeType===3 && /^\s*\[(gambar dihasilkan|hasil upscale|tidak ada gambar)\]\s*$/.test(n.textContent)) n.remove();
+  });
+  // gambar tetap di dalam gelembung
+  (imgs||[]).forEach(u=>{
     const w=document.createElement("div");
     w.className="storedwrap";
-    const name=`pgbrain-gambar-${i+1}.png`;
-    w.innerHTML=`<img src="${u}" alt="" title="Klik untuk memperbesar">
-      <button class="smallbtn" title="Unduh ${name}">⬇</button>`;
-    w.querySelector("img").onclick=()=>openLightbox(u,name);
-    w.querySelector(".smallbtn").onclick=e=>downloadAnyImage(u,name,e.currentTarget);
-    box.insertBefore(w, box.firstChild.nextSibling||null);
+    w.innerHTML=`<img src="${u}" alt="" title="Klik untuk memperbesar">`;
+    w.querySelector("img").onclick=()=>openLightbox(u,"pgbrain-gambar.png");
+    box.appendChild(w);
   });
+  // tombol unduh DI LUAR kotak, di samping gelembung
+  const row=document.createElement("div");
+  row.className="msgrow"+(box.classList.contains("user")?" user":"");
+  box.parentNode.insertBefore(row,box);
+  row.appendChild(box);
+  const col=document.createElement("div");
+  col.className="dlcol";
+  (imgs||[]).forEach((u,i)=>{
+    const name=`pgbrain-gambar-${i+1}.png`;
+    const b=document.createElement("button");
+    b.className="smallbtn"; b.textContent="⬇"; b.title="Unduh "+name;
+    b.onclick=e=>downloadAnyImage(u,name,e.currentTarget);
+    col.appendChild(b);
+  });
+  row.appendChild(col);
 }
 /* ---- auto-scroll pintar: hanya menempel ke bawah bila pengguna sedang di bawah ---- */
 let stickBottom=true;
