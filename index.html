@@ -772,6 +772,24 @@ $("scalegroup").addEventListener("click",e=>{
 });
 $("workerurl").oninput=e=>{WORKER_URL=e.target.value.trim().replace(/\/$/,"")};
 
+// Kecilkan gambar agar transfer ringan & lolos batas ukuran (sisi maks 1600px)
+function shrinkImage(mime,b64){
+  return new Promise((resolve)=>{
+    const img=new Image();
+    img.onload=()=>{
+      const MAX=1600;
+      let {width:w,height:h}=img;
+      if(Math.max(w,h)<=MAX){resolve({mime,b64});return;}
+      const s=MAX/Math.max(w,h); w=Math.round(w*s); h=Math.round(h*s);
+      const c=document.createElement("canvas"); c.width=w; c.height=h;
+      c.getContext("2d").drawImage(img,0,0,w,h);
+      const url=c.toDataURL("image/jpeg",0.85);
+      resolve({mime:"image/jpeg",b64:url.split(",")[1]});
+    };
+    img.onerror=()=>resolve({mime,b64});
+    img.src=`data:${mime};base64,${b64}`;
+  });
+}
 async function runUpscale(imgs,aiDiv){
   if(!WORKER_URL){
     aiDiv.classList.add("err");
@@ -786,7 +804,8 @@ async function runUpscale(imgs,aiDiv){
   const m=UPSCALE_MODEL;
   const imgKey=m[4]||"image";           // nama parameter gambar (beda antar model)
   const scaleKey=m[5]||"scale";         // nama parameter skala (beda antar model)
-  const input={}; input[imgKey]=`data:${imgs[0].mime};base64,${imgs[0].b64}`;
+  const small=await shrinkImage(imgs[0].mime,imgs[0].b64);
+  const input={}; input[imgKey]=`data:${small.mime};base64,${small.b64}`;
   input[scaleKey]=UPSCALE_SCALE;        // kirim skala pilihan pengguna
   const res=await fetch(WORKER_URL,{
     method:"POST",headers:{"Content-Type":"application/json"},
