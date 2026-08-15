@@ -1054,30 +1054,57 @@ async function runUpscale(imgs,aiDiv){
 }
 
 /* ---- pembuatan / pengubahan gambar ---- */
+// Dikelompokkan per fungsi. Tiap model: [id, nama, estimasiWaktu, estimasiBiaya]
 const IMAGE_MODELS={
-  gemini:[
-    ["gemini-3-pro-image","Nano Banana Pro (Google) — kualitas tertinggi, jago teks & gabung gambar"],
-    ["gemini-3.1-flash-image","Nano Banana 2 (Google) — cepat & murah, terbaik untuk edit"]
-  ],
-  openrouter:[
-    ["google/gemini-3-pro-image","Nano Banana Pro (Google) — terbaru, gabung s/d 5 subjek konsisten"],
-    ["bytedance-seed/seedream-5-0-pro","Seedream 5.0 Pro — jago pertahankan identitas & gabung gambar"],
-    ["openai/gpt-image-2","GPT Image 2 (OpenAI) — model gambar murni, editing multi-gambar"],
-    ["openai/gpt-5.4-image-2","GPT-5.4 Image 2 (OpenAI/ChatGPT) — pintar ikuti instruksi gabung"],
-    ["x-ai/grok-imagine-image-2.0","Grok Imagine 2.0 (xAI) — fotorealistis"],
-    ["bytedance-seed/seedream-5-0-lite","Seedream 5.0 Lite — cepat & hemat"]
-  ],
-  groq:[]
+  gemini:{
+    "🎨 BUAT GAMBAR BARU":[
+      ["gemini-3.1-flash-image","Nano Banana 2 — cepat & hemat","~5-8 dtk","≈$0.04"],
+      ["gemini-3-pro-image","Nano Banana Pro — kualitas tertinggi","~10-20 dtk","≈$0.13"]
+    ],
+    "🖇 GABUNG / UBAH GAMBAR":[
+      ["gemini-3-pro-image","Nano Banana Pro — gabung s/d 5 subjek konsisten","~10-20 dtk","≈$0.13"],
+      ["gemini-3.1-flash-image","Nano Banana 2 — edit cepat & murah","~5-8 dtk","≈$0.04"]
+    ]
+  },
+  openrouter:{
+    "🎨 BUAT GAMBAR BARU (hemat)":[
+      ["black-forest-labs/flux-schnell","FLUX Schnell — paling murah, sangat cepat","~3-5 dtk","≈$0.003"],
+      ["black-forest-labs/flux.1-dev","FLUX Dev — hemat, kualitas bagus","~6-10 dtk","≈$0.025"],
+      ["bytedance-seed/seedream-5-0-lite","Seedream 5.0 Lite — cepat & hemat","~5-10 dtk","≈$0.035"]
+    ],
+    "🎨 BUAT GAMBAR BARU (premium)":[
+      ["google/gemini-3-pro-image","Nano Banana Pro — kualitas tertinggi & teks rapi","~10-20 dtk","≈$0.13"],
+      ["openai/gpt-image-2","GPT Image 2 (OpenAI) — model gambar murni","~15-30 dtk","≈$0.17"],
+      ["x-ai/grok-imagine-image-2.0","Grok Imagine 2.0 — fotorealistis","~8-15 dtk","≈$0.04"]
+    ],
+    "🖇 GABUNG GAMBAR (multi-reference)":[
+      ["google/gemini-3-pro-image","Nano Banana Pro — gabung s/d 5 subjek konsisten","~10-20 dtk","≈$0.13"],
+      ["bytedance-seed/seedream-5-0-pro","Seedream 5.0 Pro — jaga identitas & gabung rapi","~10-20 dtk","≈$0.045"],
+      ["openai/gpt-5.4-image-2","GPT-5.4 Image 2 (ChatGPT) — pintar ikuti instruksi gabung","~15-30 dtk","≈$0.17"]
+    ],
+    "✏ UBAH / EDIT GAMBAR":[
+      ["black-forest-labs/flux.1-kontext-pro","FLUX Kontext Pro — khusus edit, hemat","~6-12 dtk","≈$0.04"],
+      ["bytedance-seed/seedream-5-0-pro","Seedream 5.0 Pro — edit presisi, jaga wajah","~10-20 dtk","≈$0.045"],
+      ["google/gemini-3-pro-image","Nano Banana Pro — edit lokal & instruksi akurat","~10-20 dtk","≈$0.13"]
+    ]
+  },
+  groq:{}
 };
-// model OpenAI yang HARUS lewat jalur chat/completions (bukan Unified Image API)
-const CHAT_IMAGE_MODELS=["openai/gpt-5.4-image-2","openai/gpt-5-image","openai/gpt-5-image-mini"];
-let IMAGE_MODEL="";
 function fillImageModels(){
-  const list=IMAGE_MODELS[PROVIDER]||[];
+  const groups=IMAGE_MODELS[PROVIDER]||{};
   const sel=$("imgmodel");
-  sel.innerHTML=list.map(m=>`<option value="${m[0]}">${m[1]}  ·  ⏱ ${m[2]||"?"}</option>`).join("");
-  IMAGE_MODEL=list.length?list[0][0]:"";
-  $("imgbar").classList.toggle("show",MODE==="image"&&list.length>0);
+  let first="";
+  sel.innerHTML=Object.keys(groups).map(g=>{
+    const opts=groups[g].map(m=>{
+      if(!first)first=m[0];
+      const price=m[3]?" · "+m[3]:"";
+      return `<option value="${m[0]}">${m[1]} · ⏱ ${m[2]||"?"}${price}</option>`;
+    }).join("");
+    return `<optgroup label="${g}">${opts}</optgroup>`;
+  }).join("");
+  IMAGE_MODEL=first;
+  const hasAny=Object.keys(groups).length>0;
+  $("imgbar").classList.toggle("show",MODE==="image"&&hasAny);
 }
 $("imgmodel").onchange=e=>{IMAGE_MODEL=e.target.value};
 let lastGen=null; // gambar terakhir yang dihasilkan, untuk "ubah lagi..."
