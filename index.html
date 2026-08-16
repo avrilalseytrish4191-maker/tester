@@ -759,15 +759,30 @@ let IMAGE_MODEL="";   // model gambar terpilih (mode 🎨)
 const CHAT_IMAGE_MODELS=["openai/gpt-5.4-image-2","openai/gpt-5-image","openai/gpt-5-image-mini"];
 let history=[];            // riwayat netral: {role:"user"|"model", text, img:{mime,b64}|null}
 let pendingFiles=[];   // {kind:"image"|"text", name, ...}
-let pendingQuote=null; // teks jawaban AI yang sedang dikutip
-function setQuote(text){
-  pendingQuote=text;
-  const oneLine=text.replace(/\s+/g," ").trim();
+let pendingQuote=null; // {text, img} — kutipan teks + gambar sumber (bila pesan yang dikutip bergambar)
+function setQuote(text,img){
+  pendingQuote={text:text||"",img:img||null};
+  const marker=/^\s*\[(gambar dihasilkan|hasil upscale[^\]]*)\]\s*$/i.test(text||"");
+  const shown=(img&&marker)?"🖼 gambar terlampir sebagai acuan edit":(text||"");
+  const oneLine=shown.replace(/\s+/g," ").trim();
   $("quotetext").textContent=oneLine.length>120?oneLine.slice(0,120)+"…":oneLine;
   $("quotebar").classList.add("show");
   $("input").focus();
 }
 function clearQuote(){pendingQuote=null;$("quotebar").classList.remove("show");}
+// ubah referensi gambar (dataURL atau URL http) menjadi {mime,b64,url} untuk dikirim ke model
+async function imgRefToPart(ref){
+  if(!ref)return null;
+  if(ref.startsWith("data:")){
+    const [meta,b64]=ref.split(",");
+    const mime=(meta.match(/data:(.*?);/)||[,"image/png"])[1];
+    return {mime,b64,url:ref};
+  }
+  const r=await fetch(ref); const bl=await r.blob();
+  const b64=await new Promise((res,rej)=>{const f=new FileReader();
+    f.onload=()=>res(String(f.result).split(",")[1]);f.onerror=rej;f.readAsDataURL(bl);});
+  return {mime:bl.type||"image/png",b64,url:ref};
+}
 let busy=false;
 
 const PROVIDERS={
@@ -1014,7 +1029,7 @@ function openChat(id){
       history.push({role:"user",text:m.text,imgs:null});
     }else{
       box=addMsg("ai",md(m.text||""));
-      decorate(box,m.text||"",{ts:m.ts,prompt:lastUserText});
+      decorate(box,m.text||"",{ts:m.ts,prompt:lastUserText,img:(m.imgs&&m.imgs[0])||null});
       history.push({role:"model",text:m.text,imgs:null});
     }
     if(m.imgs&&m.imgs.length) attachStoredImages(box,m.imgs);
@@ -1643,7 +1658,7 @@ function decorate(aiDiv, fullText, opts){
   tools.querySelector(".cpyall").onclick=e=>copyText(fullText,e.currentTarget);
   const rty=tools.querySelector(".rty");
   if(rty)rty.onclick=()=>retrySend(opts.prompt);
-  tools.querySelector(".quo").onclick=()=>setQuote(fullText);
+  tools.querySelector(".quo").onclick=()=>setQuote(fullText,(opts&&opts.img)||null);
   aiDiv.appendChild(tools);
 }
 
@@ -1815,8 +1830,10 @@ function renderGenImage(aiDiv,dataUrl,caption){
       <button class="bigbtn gdl" title="Unduh ${name}">⬇</button>
       <button class="bigbtn gup" data-s="1.5" title="Upscale 1.5× (Real-ESRGAN)">1.5×</button>
       <button class="bigbtn gup" data-s="2" title="Upscale 2× (Real-ESRGAN)">2×</button>
+      <button class="bigbtn gquo" title="Kutip gambar ini untuk diedit">❝</button>
     </div>`;
   w.querySelector(".genimg").onclick=()=>openLightbox(dataUrl,name);
+  w.querySelector(".gquo").onclick=()=>setQuote("[gambar dihasilkan]",dataUrl);
   const btn=w.querySelector(".gdl");
   btn.onclick=()=>{downloadDataUrl(dataUrl,name);
     btn.classList.add("ok");btn.textContent="✓";
@@ -1890,7 +1907,7 @@ async function runImageGen(prompt,imgs,aiDiv){
   // - Kalau pengguna melampirkan gambar -> edit gambar itu.
   // - Kalau tidak, dan kalimatnya berupa PERINTAH UBAH + ada hasil sebelumnya -> edit hasil itu.
   // - Selain itu -> buat gambar baru dari nol.
-  const editRe=/\b(ubah|rubah|ganti|gantilah|ubahlah|edit|perbaiki|sesuaikan|jadikan|jadikanlah|tambah|tambahkan|tambahi|hapus|hilangkan|buang|kurangi|warnai|potong|crop|perbesar|perkecil|geser|pindah|buat(lah)? jadi|jadi(kan)?|ubah jadi|remove|add|change|replace|make it|turn into|edit)\b/i;
+  const editRe=/(?:di|ter|meng?|me)?(ubah|rubah|ganti|edit|perbaik|sesuaik|jadikan|tambah|hapus|hilangkan|buang|kurangi|warnai|potong|crop|perbesar|perkecil|geser|pindah|kosong|remove|add|change|replace|make it|turn into)\w*/i;
   const refersPrev=/\b(gambar|foto|itu|tadi|tersebut|ini|sebelumnya|hasil|di ?atas)\b/i;
   const isEdit = imgs.length>0 || (lastGen && editRe.test(prompt) && refersPrev.test(prompt));
   if(!imgs.length && isEdit && lastGen) imgs=[lastGen];
@@ -2098,13 +2115,25 @@ async function sendMsg(){
     userText+="\n\nJika pengguna meminta perubahan, balas dengan file LENGKAP hasil perubahan di dalam blok kode markdown (\`\`\`), bukan potongan.";
   }
   // sisipkan kutipan (jika ada) sebagai konteks untuk AI
-  const q=pendingQuote; if(q){
-    userText="Mengacu pada bagian ini dari jawabanmu sebelumnya:\n\n> "
-      + q.replace(/\n/g,"\n> ")
-      + "\n\n"+ (text||"Tolong bahas/lanjutkan bagian di atas.");
+  const q=pendingQuote;
+  if(q&&q.img){ // kutipan bergambar → lampirkan gambar aslinya ke permintaan
+    try{const part=await imgRefToPart(q.img); if(part)imgs.push(part);}catch(_){}
+  }
+  const qt=q?(q.text||"").trim():"";
+  const qMarker=/^\[(gambar dihasilkan|hasil upscale[^\]]*)\]$/i.test(qt);
+  if(q){
+    if(q.img){
+      userText="Gambar terlampir adalah hasil sebelumnya yang saya kutip sebagai acuan. "
+        +(text||"Ubah gambar tersebut.")
+        +(qMarker?"":"\n\nKonteks kutipan:\n> "+qt.replace(/\n/g,"\n> "));
+    }else{
+      userText="Mengacu pada bagian ini dari jawabanmu sebelumnya:\n\n> "
+        + qt.replace(/\n/g,"\n> ")
+        + "\n\n"+ (text||"Tolong bahas/lanjutkan bagian di atas.");
+    }
     clearQuote();
   }
-  const quoteHtml=q?`<div style="border-left:3px solid var(--amber);padding-left:8px;margin-bottom:6px;font-size:12px;color:var(--dim);white-space:pre-wrap">❝ ${esc(q.replace(/\s+/g," ").trim().slice(0,160))}${q.length>160?"…":""}</div>`:"";
+  const quoteHtml=q?`<div style="border-left:3px solid var(--amber);padding-left:8px;margin-bottom:6px;font-size:12px;color:var(--dim);white-space:pre-wrap">❝ ${esc(((q.img&&qMarker)?"🖼 gambar acuan":qt).replace(/\s+/g," ").trim().slice(0,160))}${qt.length>160?"…":""}</div>`:"";
   // tampilkan SEMUA gambar acuan yang dilampirkan (bukan cuma yang pertama)
   const thumbs=imgs.length
     ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">`
