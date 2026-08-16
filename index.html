@@ -374,7 +374,11 @@ header{display:flex;align-items:center;gap:12px;padding:16px 2px 12px;flex-shrin
 .msg,.msg *{user-select:text;-webkit-user-select:text}
 
 .msg.user .msgtools{justify-content:flex-end}
-.msgtools{display:flex;gap:6px;margin-top:10px;user-select:none;-webkit-user-select:none}
+.msgtools{display:flex;gap:6px;align-items:center;margin-top:10px;user-select:none;-webkit-user-select:none;
+  opacity:0;transform:translateY(2px);transition:opacity .18s ease,transform .18s ease}
+.msg:hover .msgtools,.msgtools:focus-within{opacity:1;transform:none}
+.mtime{font:10.5px var(--mono);color:var(--faint);letter-spacing:.5px;padding:0 3px;white-space:nowrap}
+.msg.user .mtime{order:-1;margin-right:2px}
 .tbtn{background:var(--field);border:1px solid var(--linegray);color:var(--dim);border-radius:9px;
   padding:5px 12px;font:11px var(--mono);cursor:pointer;display:inline-flex;align-items:center;gap:5px;transition:.16s}
 .tbtn:hover{border-color:var(--line2);color:var(--gold2);box-shadow:0 0 12px rgba(201,162,39,.18);transform:translateY(-1px)}
@@ -981,13 +985,16 @@ function openChat(id){
   const c=chats.find(x=>x.id===id); if(!c)return;
   currentId=id; history=[]; activeProject=c.project||null;
   $("chat").innerHTML="";   // bersihkan total sebelum memuat chat lain
+  let lastUserText="";
   for(const m of (c.messages||[])){
     let box;
     if(m.role==="user"){
-      box=addMsg("user",esc(m.text||""),null,(m.text||""));
+      box=addMsg("user",esc(m.text||""),null,(m.text||""),m.ts);
+      lastUserText=m.text||"";
       history.push({role:"user",text:m.text,imgs:null});
     }else{
       box=addMsg("ai",md(m.text||""));
+      decorate(box,m.text||"",{ts:m.ts,prompt:lastUserText});
       history.push({role:"model",text:m.text,imgs:null});
     }
     if(m.imgs&&m.imgs.length) attachStoredImages(box,m.imgs);
@@ -1007,7 +1014,7 @@ function recordMessage(role,text,targetId,imgs){
     // hanya pindahkan tampilan ke chat baru bila pengguna belum pindah ke tab lain
     if(!targetId && currentId===null) currentId=c.id;
   }
-  const msg={role,text};
+  const msg={role,text,ts:Date.now()};
   if(imgs&&imgs.length) msg.imgs=imgs;   // simpan gambar agar tetap ada saat chat dibuka lagi
   c.messages.push(msg); c.ts=Date.now();
   if(c.messages.length===1) c.title=(text||"Chat baru").slice(0,40);
@@ -1493,16 +1500,17 @@ function md(s){
   return s;
 }
 function tagHtml(){return `<span class="tag">PGBrain · ${PROVIDERS[PROVIDER].label}</span>`}
-function addMsg(role,html,imgUrl,quoteSource){
+function addMsg(role,html,imgUrl,quoteSource,ts){
   $("empty")&&$("empty").remove();
   const d=document.createElement("div");
   d.className="msg "+role;
   d.innerHTML=(role==="ai"?tagHtml():"")+(imgUrl?`<img src="${imgUrl}" alt="">`:"")+html;
-  // pesan pengguna juga bisa dikutip
+  // pesan pengguna juga bisa dikutip + keterangan waktu
   if(role==="user" && quoteSource){
     const tools=document.createElement("div");
     tools.className="msgtools";
-    tools.innerHTML=`<button class="tbtn quo">❝ Kutip</button>`;
+    tools.innerHTML=`<button class="tbtn quo">❝ Kutip</button>`
+      +(ts?`<span class="mtime">${ago(ts)}</span>`:"");
     tools.querySelector(".quo").onclick=()=>setQuote(quoteSource);
     d.appendChild(tools);
   }
@@ -1510,6 +1518,13 @@ function addMsg(role,html,imgUrl,quoteSource){
   stickBottom=true;                 // kirim/terima pesan baru = ikuti ke bawah
   $("chat").scrollTop=$("chat").scrollHeight;
   return d;
+}
+
+// kirim ulang pertanyaan yang sama (tombol 🔄 Ulangi pada jawaban AI)
+function retrySend(prompt){
+  if(busy||!API_KEY||!prompt)return;
+  ta.value=prompt;
+  sendMsg();
 }
 
 
@@ -1542,7 +1557,7 @@ const FNAME={html:"index",css:"style",js:"script",py:"main",json:"data",jsx:"App
   java:"Main",c:"main",cpp:"main",sql:"query",sh:"run",yml:"config",xml:"data",php:"index",txt:"catatan"};
 const FICON={html:"</>",css:"#",js:"JS",py:"PY",json:"{}",jsx:"</>",ts:"TS",java:"J",cpp:"C+",c:"C",
   sql:"DB",sh:">_",yml:"YML",xml:"<>",php:"PHP",txt:"TXT"};
-function decorate(aiDiv, fullText){
+function decorate(aiDiv, fullText, opts){
   msgCounter++;
   const files=[]; const usedNames={};
   // 1) header tiap blok kode: bahasa + salin; blok panjang diringkas
@@ -1598,12 +1613,16 @@ function decorate(aiDiv, fullText){
     }
     aiDiv.appendChild(fc);
   }
-  // 3) tombol salin + kutip jawaban
+  // 3) tombol salin + ulangi + kutip + waktu (muncul saat kursor di atas pesan)
   const tools=document.createElement("div");
   tools.className="msgtools";
-  tools.innerHTML=`<button class="tbtn cpyall">⧉ Salin jawaban</button>`
-    +`<button class="tbtn quo">❝ Kutip</button>`;
+  tools.innerHTML=`<button class="tbtn cpyall">⧉ Salin</button>`
+    +(opts&&opts.prompt?`<button class="tbtn rty" title="Kirim ulang pertanyaan yang sama">🔄 Ulangi</button>`:"")
+    +`<button class="tbtn quo">❝ Kutip</button>`
+    +((opts&&opts.ts)?`<span class="mtime">${ago(opts.ts)}</span>`:"");
   tools.querySelector(".cpyall").onclick=e=>copyText(fullText,e.currentTarget);
+  const rty=tools.querySelector(".rty");
+  if(rty)rty.onclick=()=>retrySend(opts.prompt);
   tools.querySelector(".quo").onclick=()=>setQuote(fullText);
   aiDiv.appendChild(tools);
 }
@@ -1940,7 +1959,7 @@ async function sendMsg(){
       + imgs.map(im=>`<img src="${im.url}" style="max-height:180px;max-width:46%;object-fit:cover;border-radius:10px;border:1px solid var(--line);cursor:zoom-in" onclick="openLightbox('${im.url}','acuan.png')">`).join("")
       + `</div>` : "";
   const label=quoteHtml+thumbs+esc(text||"")+(atts.length?`<div style="font:11px var(--mono);color:var(--dim);margin-top:6px">📎 ${atts.map(f=>esc(f.name)).join(", ")}</div>`:"");
-  addMsg("user",label||"(lampiran)",null, (text||userText));
+  addMsg("user",label||"(lampiran)",null, (text||userText), Date.now());
   history.push({role:"user",text:userText,imgs});
   const targetChatId = recordMessage("user", text||userText);
   // simpan lampiran gambar ke history (dikecilkan dulu), tanpa menahan alur
@@ -2026,7 +2045,7 @@ async function sendMsg(){
     else {
       history.push({role:"model",text:full,imgs:null});
       recordMessage("model",full,targetChatId);
-      if(currentId===targetChatId){decorate(aiDiv,full);}   // tampil hanya di tab asal
+      if(currentId===targetChatId){decorate(aiDiv,full,{ts:Date.now(),prompt:userText});}   // tampil hanya di tab asal
       else{aiDiv.remove();}                                  // sudah pindah tab: buang gelembung nyasar
     }
   }catch(e){
