@@ -149,6 +149,9 @@ body::after{
 .chatitem:hover .dot0{border-color:var(--gold)}
 .chatitem.active .dot0{background:var(--gold);border-color:var(--gold);box-shadow:0 0 9px rgba(201,162,39,.7)}
 .chatitem.pinned .dot0{background:var(--gold2);border-color:var(--gold2);box-shadow:0 0 9px rgba(232,207,122,.7)}
+.chatitem.working .dot0{background:var(--gold);border-color:var(--gold);
+  animation:workpulse 1s ease-in-out infinite}
+@keyframes workpulse{0%,100%{box-shadow:0 0 4px rgba(201,162,39,.5)}50%{box-shadow:0 0 14px rgba(232,207,122,.95)}}
 .chatitem .ttl{flex:1;min-width:0;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
 .chatitem .dots{background:none;border:none;color:var(--dim);cursor:pointer;font-size:17px;
   padding:0 2px;flex-shrink:0;opacity:0;line-height:1;border-radius:6px;transition:.16s}
@@ -783,7 +786,17 @@ async function imgRefToPart(ref){
     f.onload=()=>res(String(f.result).split(",")[1]);f.onerror=rej;f.readAsDataURL(bl);});
   return {mime:bl.type||"image/png",b64,url:ref};
 }
-let busy=false;
+let busyChats=new Set();   // id chat yang sedang menunggu jawaban — boleh banyak sekaligus
+function chatBusy(id){return !!id && busyChats.has(id);}
+function setChatBusy(id,on){
+  if(!id)return;
+  on?busyChats.add(id):busyChats.delete(id);
+  updateSendState(); renderChatList();
+}
+function updateSendState(){ // tombol kirim hanya terkunci bila CHAT INI yang sibuk
+  if($("send"))$("send").disabled=chatBusy(currentId);
+  if(typeof refreshUpscaleBtn==="function")refreshUpscaleBtn();
+}
 
 const PROVIDERS={
   gemini:{
@@ -997,6 +1010,7 @@ function currentChat(){return chats.find(c=>c.id===currentId);}
 
 function newChat(){
   currentId=null; history=[]; activeProject=null;
+  updateSendState();
   $("chat").innerHTML="";   // bersihkan total: gelembung, msgrow, tombol unduh
   // pulihkan tampilan kosong
   if(!$("empty")){
@@ -1019,6 +1033,7 @@ function newChatInProject(pname){
 function openChat(id){
   const c=chats.find(x=>x.id===id); if(!c)return;
   currentId=id; history=[]; activeProject=c.project||null;
+  updateSendState();
   $("chat").innerHTML="";   // bersihkan total sebelum memuat chat lain
   let lastUserText="";
   for(const m of (c.messages||[])){
@@ -1180,6 +1195,7 @@ function createProject(){
 function showProjectHome(pname){
   const p=projByName(pname); if(!p)return;
   currentId=null; history=[]; activeProject=pname;
+  updateSendState();
   const items=chats.filter(c=>c.project===pname).sort((a,b)=>b.ts-a.ts);
   const box=$("chat"); box.innerHTML="";
   const pg=document.createElement("div"); pg.className="projhome";
@@ -1263,7 +1279,8 @@ function openProjectMenu(anchor,p){
 
 function chatRow(c){
   const el=document.createElement("div");
-  el.className="chatitem"+(c.id===currentId?" active":"")+(c.pinned?" pinned":"");
+  el.className="chatitem"+(c.id===currentId?" active":"")+(c.pinned?" pinned":"")
+    +(chatBusy(c.id)?" working":"");
   el.innerHTML=`<span class="dot0"></span>`
     +`<span class="ttl" title="${esc(c.title)}">${esc(c.title)}</span>`
     +`<button class="dots" title="Opsi">⋮</button>`;
@@ -1431,11 +1448,11 @@ function refreshUpscaleBtn(){
   const on=(MODE==="upscale");
   $("upscaleaction").classList.toggle("show", on && !!API_KEY);
   if(on){
-    $("upscalebig").disabled=!hasImg||busy;
+    $("upscalebig").disabled=!hasImg||chatBusy(currentId);
     $("uphint").textContent=hasImg?"Siap. Tekan tombol untuk memproses.":"Unggah satu gambar dulu (📎 atau seret ke sini)";
   }
 }
-$("upscalebig")&&($("upscalebig").onclick=()=>{ if(!busy) sendMsg(); });
+$("upscalebig")&&($("upscalebig").onclick=()=>{ if(!chatBusy(currentId)) sendMsg(); });
 function updateComposerForMode(){
   if(MODE==="upscale"){
     $("input").style.display="none";
@@ -1557,7 +1574,7 @@ function addMsg(role,html,imgUrl,quoteSource,ts){
 
 // kirim ulang pertanyaan yang sama (tombol 🔄 Ulangi pada jawaban AI)
 function retrySend(prompt){
-  if(busy||!API_KEY||!prompt)return;
+  if(chatBusy(currentId)||!API_KEY||!prompt)return;
   ta.value=prompt;
   sendMsg();
 }
@@ -1752,7 +1769,7 @@ function shrinkImage(mime,b64){
     img.src=`data:${mime};base64,${b64}`;
   });
 }
-async function runUpscale(imgs,aiDiv){
+async function runUpscale(imgs,aiDiv,targetChatId){
   if(!WORKER_URL){
     aiDiv.classList.add("err");
     aiDiv.innerHTML=tagHtml()+"⚠ Alamat jembatan Upscale belum diisi. Buka panel ⚙ dan tempel alamat Cloudflare Worker-mu (https://...workers.dev).";
@@ -1785,7 +1802,7 @@ async function runUpscale(imgs,aiDiv){
   w.innerHTML=`<img class="genimg" src="${url}" alt="" title="Klik untuk memperbesar">
     <div class="genactions"><button class="bigbtn gdl" title="Unduh">⬇</button></div>`;
   w.querySelector(".genimg").onclick=()=>openLightbox(url,name);
-  recordMessage("model","[hasil upscale]",null,[url]);   // simpan ke history
+  recordMessage("model","[hasil upscale]",targetChatId,[url]);   // simpan ke chat ASAL permintaan
   w.querySelector(".gdl").onclick=async()=>{
     try{const r=await fetch(url);const b=await r.blob();const a=document.createElement("a");
       a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();
@@ -1845,12 +1862,13 @@ function renderGenImage(aiDiv,dataUrl,caption){
 
 /* upscale hasil generate — dipicu tombol 1.5×/2× pada gambar, memakai Real-ESRGAN */
 async function upscaleGenerated(src,scale,srcBtn){
-  if(busy)return;
+  const targetChatId=currentId; // patok ke chat tempat tombol ditekan
+  if(chatBusy(targetChatId))return;
   if(!WORKER_URL){
     const d=addMsg("ai",tagHtml()+"⚠ Alamat jembatan Upscale belum diisi. Buka panel ⚙ dan tempel alamat Cloudflare Worker-mu (https://...workers.dev).");
     d.classList.add("err");return;
   }
-  busy=true;$("send").disabled=true;
+  setChatBusy(targetChatId,true);
   if(srcBtn){srcBtn.disabled=true;srcBtn.style.opacity=".5";}
   const aiDiv=addMsg("ai",`<span class="typing"><i></i><i></i><i></i></span>`);
   try{
@@ -1882,7 +1900,7 @@ async function upscaleGenerated(src,scale,srcBtn){
         a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();
         setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},800);}catch(_){window.open(url,"_blank")}
     };
-    recordMessage("model","[hasil upscale "+scale+"×]",null,[url]);
+    recordMessage("model","[hasil upscale "+scale+"×]",targetChatId,[url]);
     aiDiv.appendChild(w);
     scrollIfBottom();
   }catch(e){
@@ -1893,9 +1911,9 @@ async function upscaleGenerated(src,scale,srcBtn){
       :"Coba lagi, atau cek token di Worker.")+"</small>";
   }
   if(srcBtn){srcBtn.disabled=false;srcBtn.style.opacity="";}
-  busy=false;$("send").disabled=false;
+  setChatBusy(targetChatId,false);
 }
-async function runImageGen(prompt,imgs,aiDiv){
+async function runImageGen(prompt,imgs,aiDiv,targetChatId){
   const useModel=IMAGE_MODEL;            // kunci: agar label & panggilan konsisten
   const seed=Math.floor(Math.random()*1e9); // variasi tiap generate ulang
   if(PROVIDER==="groq"){
@@ -2058,15 +2076,18 @@ async function runImageGen(prompt,imgs,aiDiv){
   if(images.length){
     images.forEach(u=>renderGenImage(aiDiv,u,""));
     // simpan hasil gambar ke history chat
-    imgsForHistory(images).then(list=>recordMessage("model", text||"[gambar dihasilkan]", null, list));
+    imgsForHistory(images).then(list=>{
+      recordMessage("model", text||"[gambar dihasilkan]", targetChatId, list);
+      if(currentId===targetChatId && !document.body.contains(aiDiv)) openChat(targetChatId);
+    });
     const [meta,b64]=images[0].split(",");
     lastGen={mime:(meta.match(/data:(.*?);/)||[,"image/png"])[1],b64};
   }else if(!text){
     aiDiv.classList.add("err");
     aiDiv.innerHTML=tagHtml()+"Tidak ada gambar yang dihasilkan. Coba perjelas perintahnya, atau permintaan ditolak kebijakan keamanan.";
   }
-  history.push({role:"model",text:(text||"[gambar dihasilkan]"),imgs:null});
-  if(!images.length) recordMessage("model", text||"[tidak ada gambar]");
+  if(currentId===targetChatId)history.push({role:"model",text:(text||"[gambar dihasilkan]"),imgs:null});
+  if(!images.length) recordMessage("model", text||"[tidak ada gambar]", targetChatId);
   scrollIfBottom();
 }
 /* ---- format permintaan per penyedia ---- */
@@ -2098,10 +2119,10 @@ function buildOpenAIBody(){
 
 /* ---- kirim (streaming, semua penyedia) ---- */
 async function sendMsg(){
-  if(busy||!API_KEY)return;
+  if(!API_KEY)return;
+  if(chatBusy(currentId))return;   // chat INI sedang proses — chat lain tetap bebas
   const text=ta.value.trim();
   if(!text && pendingFiles.length===0)return;   // butuh teks ATAU lampiran
-  busy=true;$("send").disabled=true;
   ta.value="";ta.style.height="auto";
 
   const atts=pendingFiles; pendingFiles=[]; renderChips();
@@ -2143,6 +2164,7 @@ async function sendMsg(){
   addMsg("user",label||"(lampiran)",null, (text||userText), Date.now());
   history.push({role:"user",text:userText,imgs});
   const targetChatId = recordMessage("user", text||userText);
+  setChatBusy(targetChatId,true);   // kunci HANYA chat ini
   // simpan lampiran gambar ke history (dikecilkan dulu), tanpa menahan alur
   if(imgs.length) imgsForHistory(imgs).then(list=>{
     const c=chats.find(x=>x.id===targetChatId);
@@ -2152,25 +2174,25 @@ async function sendMsg(){
   const aiDiv=addMsg("ai",`<span class="typing"><i></i><i></i><i></i></span>`);
 
   if(MODE==="upscale"){
-    try{await runUpscale(imgs,aiDiv)}
+    try{await runUpscale(imgs,aiDiv,targetChatId)}
     catch(e){aiDiv.classList.add("err");
       const isNet=/failed to fetch|networkerror|load failed/i.test(e.message||"");
       aiDiv.innerHTML=tagHtml()+"⚠ "+esc(e.message)+"<br><small>"+(isNet
         ?"Gagal menyambung ke jembatan. Cek alamat Worker & token Replicate di Cloudflare."
         :"Cek token Replicate di worker, atau ganti model.")+"</small>"}
-    busy=false;$("send").disabled=false;refreshUpscaleBtn();ta.focus();
+    setChatBusy(targetChatId,false);ta.focus();
     return;
   }
 
   if(MODE==="image"){
-    try{await runImageGen(userText,imgs,aiDiv)}
+    try{await runImageGen(userText,imgs,aiDiv,targetChatId)}
     catch(e){aiDiv.classList.add("err");
       const isNet=/failed to fetch|networkerror|load failed/i.test(e.message||"");
       const hint=isNet
         ? "Gagal menyambung ke server (bukan soal API key). Kemungkinan: koneksi internet PC ini, firewall/antivirus memblokir openrouter.ai, atau model gambar ini tak tersedia. Coba: (1) ganti model gambar, (2) coba jaringan lain, (3) pastikan bisa buka openrouter.ai di browser PC ini."
         : "Periksa API key/kuota, atau ganti penyedia di panel ⚙.";
       aiDiv.innerHTML=tagHtml()+"⚠ "+esc(e.message)+"<br><small>"+hint+"</small>"}
-    busy=false;$("send").disabled=false;ta.focus();
+    setChatBusy(targetChatId,false);ta.focus();
     return;
   }
 
@@ -2224,17 +2246,20 @@ async function sendMsg(){
     }
     if(!full){aiDiv.classList.add("err");aiDiv.innerHTML="Tidak ada respons. Permintaan mungkin ditolak kebijakan keamanan penyedia — coba ubah kalimatnya, atau ganti model di panel ⚙."}
     else {
-      history.push({role:"model",text:full,imgs:null});
+      if(currentId===targetChatId) history.push({role:"model",text:full,imgs:null});
       recordMessage("model",full,targetChatId);
-      if(currentId===targetChatId){decorate(aiDiv,full,{ts:Date.now(),prompt:userText});}   // tampil hanya di tab asal
+      if(currentId===targetChatId){
+        if(document.body.contains(aiDiv)){decorate(aiDiv,full,{ts:Date.now(),prompt:userText});}
+        else openChat(targetChatId);   // pengguna sempat pergi lalu kembali: muat ulang isi chat
+      }
       else{aiDiv.remove();}                                  // sudah pindah tab: buang gelembung nyasar
     }
   }catch(e){
     aiDiv.classList.add("err");
     aiDiv.innerHTML="⚠ "+esc(e.message)+"<br><small>Periksa API key, kuota harian, atau koneksi internet. Coba juga ganti model/penyedia di panel ⚙.</small>";
-    history.pop();
+    if(currentId===targetChatId)history.pop();
   }
-  busy=false;$("send").disabled=false;ta.focus();
+  setChatBusy(targetChatId,false);ta.focus();
 }
 
 
