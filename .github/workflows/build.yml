@@ -58,19 +58,11 @@ jobs:
           path: dist/PGBrain.exe
 
   # ============================================================
-  # Versi macOS — dibangun untuk dua jenis chip:
-  #   - macos-14 = Apple Silicon (M1/M2/M3/M4)
-  #   - macos-13 = Intel (MacBook lama)
+  # Versi macOS — Apple Silicon (M1/M2/M3/M4)
   # ============================================================
   build-macos:
-    strategy:
-      matrix:
-        include:
-          - os: macos-14
-            arch: apple-silicon
-          - os: macos-13
-            arch: intel
-    runs-on: ${{ matrix.os }}
+    # khusus Apple Silicon (M1/M2/M3/M4) — versi Intel tidak dipakai lagi
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
 
@@ -123,10 +115,10 @@ jobs:
           main.py
 
       - name: Zip .app (agar izin & struktur bundle tetap utuh)
-        run: ditto -c -k --sequesterRsrc --keepParent dist/PGBrain.app PGBrain-macos-${{ matrix.arch }}.zip
+        run: ditto -c -k --sequesterRsrc --keepParent dist/PGBrain.app PGBrain-macos-apple-silicon.zip
 
       - name: Upload APP
         uses: actions/upload-artifact@v4
         with:
-          name: PGBrain-macos-${{ matrix.arch }}
-          path: PGBrain-macos-${{ matrix.arch }}.zip
+          name: PGBrain-macos-apple-silicon
+          path: PGBrain-macos-apple-silicon.zip
