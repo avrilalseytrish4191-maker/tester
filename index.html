@@ -1027,6 +1027,8 @@ function ago(ts){
 }
 let meName = "anggota";   // nama pembuat (dari user login)
 let VIEW_ALL=false;        // mode pantau admin: lihat chat SEMUA akun (baca saja)
+let deletedIds=[];         // id chat yang dihapus di perangkat ini (nisan utk sinkron)
+function touch(c){if(c)c.mt=Date.now();} // stempel "baru diubah" agar menang saat digabung
 let ME=null;               // {u,role,perms,token} dari server akun (null = mode lokal lama)
 const ALL_MODES=["chat","think","innovate","image","upscale","code","write"];
 function HB(){ // alamat dasar worker (tanpa / di ujung); null bila belum dikonfigurasi
@@ -1084,6 +1086,49 @@ let _localMem="[]";
 function localStorage_getItem(){return _localMem;}
 function localStorage_setItem(v){_localMem=v;}
 
+/* ===== SINKRON LANGSUNG antar perangkat (akun sama) =====
+   Tarik data server tiap 5 dtk, gabungkan tanpa mengganggu:
+   - chat yang sedang diproses / baru diubah di sini tetap dipertahankan
+   - chat yang dihapus di perangkat lain ikut hilang di sini
+   - bila chat yang sedang dibuka dapat pesan baru → tampilan dimuat ulang otomatis */
+let _syncBusy=false;
+function mtOf(c){return (c&&(c.mt||c.ts))||0;}
+async function pollSync(){
+  if(_syncBusy||!HB()||!ME||!ME.token)return;
+  if(saveTimer)return;                       // ada perubahan lokal menunggu disimpan — lewati dulu
+  _syncBusy=true;
+  try{
+    const h={"X-Auth":ME.token};
+    const r=await fetch(HISTORY_URL+(VIEW_ALL?"?all=1":""),{method:"GET",headers:h});
+    const d=await r.json();
+    if(Array.isArray(d.chats)){
+      const server=new Map(d.chats.map(c=>[c.id,c]));
+      const merged=[...d.chats];
+      for(const c of chats){                 // pertahankan yang lebih baru / sedang berjalan di sini
+        const s=server.get(c.id);
+        if(chatBusy(c.id) || (!s && (Date.now()-mtOf(c)<15000)) || (s && mtOf(c)>mtOf(s))){
+          const i=merged.findIndex(x=>x.id===c.id);
+          i>=0?merged[i]=c:merged.unshift(c);
+        }
+      }
+      const openBefore=currentId?JSON.stringify((chats.find(x=>x.id===currentId)||{}).messages||[]).length:0;
+      chats=merged.filter(c=>!deletedIds.includes(c.id));
+      if(!VIEW_ALL && Array.isArray(d.projects)){projects=d.projects;normProjects();}
+      const cur=currentId?chats.find(x=>x.id===currentId):null;
+      const openAfter=cur?JSON.stringify(cur.messages||[]).length:0;
+      renderChatList();
+      if(cur && openAfter!==openBefore && !chatBusy(currentId)){
+        openChat(currentId);                 // pesan baru dari perangkat lain → tampilkan sekarang
+      }else if(currentId && !cur){           // chat yang sedang dibuka dihapus di perangkat lain
+        newChat();
+      }
+      $("sbsync").textContent="tersinkron • "+chats.length+" chat";
+    }
+  }catch(_){}
+  _syncBusy=false;
+}
+setInterval(pollSync,5000);
+
 let saveTimer=null;
 function saveChats(){
   // debounce agar tidak spam server
@@ -1094,7 +1139,7 @@ function saveChats(){
     try{
       const h={"Content-Type":"application/json"}; if(ME&&ME.token)h["X-Auth"]=ME.token;
       await fetch(HISTORY_URL,{method:"POST",headers:h,
-        body:JSON.stringify({chats,projects})});
+        body:JSON.stringify({chats,projects,deleted:deletedIds})});
       $("sbsync").textContent="tersinkron • "+chats.length+" chat";
     }catch(e){$("sbsync").textContent="gagal simpan";}
   },600);
@@ -1160,7 +1205,7 @@ function recordMessage(role,text,targetId,imgs){
   }
   const msg={role,text,ts:Date.now()};
   if(imgs&&imgs.length) msg.imgs=imgs;   // simpan gambar agar tetap ada saat chat dibuka lagi
-  c.messages.push(msg); c.ts=Date.now();
+  c.messages.push(msg); c.ts=Date.now(); c.mt=Date.now();
   if(c.messages.length===1) c.title=(text||"Chat baru").slice(0,40);
   saveChats(); renderChatList();
   return c.id;
@@ -1373,6 +1418,7 @@ function openProjectMenu(anchor,p){
     const n=chats.filter(c=>c.project===p.name).length;
     if(confirm("Hapus proyek \""+p.name+"\" BESERTA "+n+" chat di dalamnya? Ini menghapus untuk semua anggota tim dan tidak bisa dibatalkan.")){
       const ids=new Set(chats.filter(c=>c.project===p.name).map(c=>c.id));
+      deletedIds.push(...ids);
       chats=chats.filter(c=>!ids.has(c.id));
       projects=projects.filter(x=>x!==p);
       if(ids.has(currentId)||activeProject===p.name){activeProject=null;newChat();}
@@ -1413,17 +1459,18 @@ function openMenu(anchor,c){
       ${c.project?`<button class="mout">📤 Keluarkan dari proyek</button>`:""}
       <button class="marc">${c.archived?"🗄 Keluarkan dari arsip":"🗄 Arsipkan"}</button>
       <button class="mdel danger">🗑 Hapus</button>`;
-    m.querySelector(".mpin").onclick=()=>{c.pinned=!c.pinned;saveChats();renderChatList();m.remove();};
+    m.querySelector(".mpin").onclick=()=>{c.pinned=!c.pinned;touch(c);saveChats();renderChatList();m.remove();};
     m.querySelector(".mrn").onclick=()=>{
       const nn=(prompt("Nama baru untuk chat ini:",c.title)||"").trim();
-      if(nn){c.title=nn.slice(0,60);saveChats();renderChatList();}
+      if(nn){c.title=nn.slice(0,60);touch(c);saveChats();renderChatList();}
       m.remove();
     };
     m.querySelector(".mmv").onclick=(e)=>{e.stopPropagation();projView();place();};
-    if(c.project) m.querySelector(".mout").onclick=()=>{delete c.project;saveChats();renderChatList();m.remove();};
-    m.querySelector(".marc").onclick=()=>{c.archived=!c.archived;saveChats();renderChatList();m.remove();};
+    if(c.project) m.querySelector(".mout").onclick=()=>{delete c.project;touch(c);saveChats();renderChatList();m.remove();};
+    m.querySelector(".marc").onclick=()=>{c.archived=!c.archived;touch(c);saveChats();renderChatList();m.remove();};
     m.querySelector(".mdel").onclick=()=>{
-      if(confirm("Hapus chat \""+c.title+"\"? Ini menghapus untuk semua anggota tim.")){
+      if(confirm("Hapus chat \""+c.title+"\"?")){
+        deletedIds.push(c.id);
         chats=chats.filter(x=>x.id!==c.id);
         if(currentId===c.id) newChat();
         saveChats();renderChatList();
@@ -1441,7 +1488,7 @@ function openMenu(anchor,c){
     m.innerHTML=rows;
     m.querySelector(".mback").onclick=(e)=>{e.stopPropagation();mainView();place();};
     m.querySelectorAll(".mgo").forEach(b=>b.onclick=()=>{
-      c.project=b.dataset.p; projOpen[c.project]=true;
+      c.project=b.dataset.p; touch(c); projOpen[c.project]=true;
       saveChats();renderChatList();m.remove();
     });
     m.querySelector(".mnew").onclick=()=>{
