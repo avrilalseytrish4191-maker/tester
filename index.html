@@ -550,6 +550,11 @@ textarea::placeholder{color:var(--faint)}
 .send:not(:disabled):hover{transform:translateY(-2px) scale(1.05);box-shadow:0 10px 30px rgba(232,207,122,.4)}
 .send:not(:disabled):active{transform:scale(.95)}
 .send:disabled{opacity:.32;cursor:default;box-shadow:none}
+.stopbtn{display:none;align-items:center;justify-content:center;width:44px;height:44px;border-radius:14px;
+  background:var(--raise);border:1px solid rgba(217,83,106,.55);color:var(--danger);font-size:15px;
+  cursor:pointer;flex-shrink:0;transition:.18s;animation:rise .2s ease}
+.stopbtn:hover{background:rgba(217,83,106,.16);border-color:var(--danger);
+  box-shadow:0 0 16px rgba(217,83,106,.35);transform:translateY(-2px)}
 .hint{text-align:center;font:10.5px var(--mono);color:var(--faint);margin-top:10px;letter-spacing:1px}
 
 /* ===== Layar Login ===== */
@@ -711,6 +716,7 @@ textarea::placeholder{color:var(--faint)}
       <button class="icon" id="attach" title="Lampirkan file (gambar / kode / teks)">📎</button>
       <input type="file" id="file" multiple hidden>
       <textarea id="input" rows="1" placeholder="Tulis apa saja…"></textarea>
+      <button class="stopbtn" id="stopbtn" title="Hentikan proses di chat ini">◼</button>
       <button class="send" id="send" title="Kirim" disabled>➤</button>
     </div>
     <div class="hint" id="hint">Enter kirim · Shift+Enter baris baru</div>
@@ -787,14 +793,23 @@ async function imgRefToPart(ref){
   return {mime:bl.type||"image/png",b64,url:ref};
 }
 let busyChats=new Set();   // id chat yang sedang menunggu jawaban — boleh banyak sekaligus
+let chatAborters=new Map(); // id chat -> AbortController, untuk tombol Stop per-chat
+function sigFor(id){const a=chatAborters.get(id);return a?a.signal:undefined;}
+function stopCurrent(){ // hentikan HANYA chat yang sedang dibuka
+  const a=chatAborters.get(currentId);
+  if(a)a.abort();
+}
 function chatBusy(id){return !!id && busyChats.has(id);}
 function setChatBusy(id,on){
   if(!id)return;
-  on?busyChats.add(id):busyChats.delete(id);
+  if(on){busyChats.add(id);}
+  else{busyChats.delete(id);chatAborters.delete(id);}
   updateSendState(); renderChatList();
 }
 function updateSendState(){ // tombol kirim hanya terkunci bila CHAT INI yang sibuk
-  if($("send"))$("send").disabled=chatBusy(currentId);
+  const b=chatBusy(currentId);
+  if($("send"))$("send").disabled=b;
+  if($("stopbtn"))$("stopbtn").style.display=b?"flex":"none"; // Stop muncul hanya saat chat ini proses
   if(typeof refreshUpscaleBtn==="function")refreshUpscaleBtn();
 }
 
@@ -1453,6 +1468,7 @@ function refreshUpscaleBtn(){
   }
 }
 $("upscalebig")&&($("upscalebig").onclick=()=>{ if(!chatBusy(currentId)) sendMsg(); });
+$("stopbtn")&&($("stopbtn").onclick=stopCurrent);
 function updateComposerForMode(){
   if(MODE==="upscale"){
     $("input").style.display="none";
@@ -1787,7 +1803,7 @@ async function runUpscale(imgs,aiDiv,targetChatId){
   const input={}; input[imgKey]=`data:${small.mime};base64,${small.b64}`;
   if(scaleKey) input[scaleKey]=UPSCALE_SCALE;
   const res=await fetch(WORKER_URL,{
-    method:"POST",headers:{"Content-Type":"application/json"},
+    method:"POST",headers:{"Content-Type":"application/json"},signal:sigFor(targetChatId),
     body:JSON.stringify({model:m.id,input})   // endpoint fal.ai
   });
   if(!res.ok){const err=await res.json().catch(()=>({}));throw new Error(err.error||`HTTP ${res.status}`)}
@@ -1864,6 +1880,7 @@ function renderGenImage(aiDiv,dataUrl,caption){
 async function upscaleGenerated(src,scale,srcBtn){
   const targetChatId=currentId; // patok ke chat tempat tombol ditekan
   if(chatBusy(targetChatId))return;
+  chatAborters.set(targetChatId,new AbortController());
   if(!WORKER_URL){
     const d=addMsg("ai",tagHtml()+"⚠ Alamat jembatan Upscale belum diisi. Buka panel ⚙ dan tempel alamat Cloudflare Worker-mu (https://...workers.dev).");
     d.classList.add("err");return;
@@ -1882,7 +1899,7 @@ async function upscaleGenerated(src,scale,srcBtn){
     }                                           // URL http(s) → kirim apa adanya
     const input={}; input[m.imgKey||"image_url"]=imageVal; input[m.scaleKey||"scale"]=scale;
     const res=await fetch(WORKER_URL,{
-      method:"POST",headers:{"Content-Type":"application/json"},
+      method:"POST",headers:{"Content-Type":"application/json"},signal:sigFor(targetChatId),
       body:JSON.stringify({model:m.id,input})
     });
     if(!res.ok){const err=await res.json().catch(()=>({}));throw new Error(err.error||`HTTP ${res.status}`)}
@@ -1904,11 +1921,13 @@ async function upscaleGenerated(src,scale,srcBtn){
     aiDiv.appendChild(w);
     scrollIfBottom();
   }catch(e){
+    if(e&&e.name==="AbortError"){aiDiv.innerHTML=tagHtml()+"⏹ Dihentikan.";}
+    else{
     aiDiv.classList.add("err");
     const isNet=/failed to fetch|networkerror|load failed/i.test(e.message||"");
     aiDiv.innerHTML=tagHtml()+"⚠ "+esc(e.message)+"<br><small>"+(isNet
       ?"Gagal menyambung ke jembatan. Cek alamat Worker & token Replicate/fal di panel ⚙."
-      :"Coba lagi, atau cek token di Worker.")+"</small>";
+      :"Coba lagi, atau cek token di Worker.")+"</small>";}
   }
   if(srcBtn){srcBtn.disabled=false;srcBtn.style.opacity="";}
   setChatBusy(targetChatId,false);
@@ -1964,10 +1983,10 @@ async function runImageGen(prompt,imgs,aiDiv,targetChatId){
       return JSON.stringify({contents:[{role:"user",parts}],generationConfig:gc});
     };
     let res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${useModel}:generateContent?key=${API_KEY}`,{
-      method:"POST",headers:{"Content-Type":"application/json"},body:gBody(true)});
+      signal:sigFor(targetChatId),method:"POST",headers:{"Content-Type":"application/json"},body:gBody(true)});
     if(!res.ok&&arStr){ // model tak kenal imageConfig → ulangi tanpa parameter rasio
       res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${useModel}:generateContent?key=${API_KEY}`,{
-        method:"POST",headers:{"Content-Type":"application/json"},body:gBody(false)});
+        signal:sigFor(targetChatId),method:"POST",headers:{"Content-Type":"application/json"},body:gBody(false)});
     }
     if(!res.ok){const err=await res.json().catch(()=>({}));throw new Error(err.error?.message||`HTTP ${res.status}`)}
     const data=await res.json();
@@ -1990,10 +2009,10 @@ async function runImageGen(prompt,imgs,aiDiv,targetChatId){
         form.append("image[]",new Blob([bin],{type:im.mime}),"acuan.png");
       }
       res=await fetch("https://api.openai.com/v1/images/edits",{
-        method:"POST",headers:{"Authorization":"Bearer "+API_KEY},body:form});
+        signal:sigFor(targetChatId),method:"POST",headers:{"Authorization":"Bearer "+API_KEY},body:form});
     }else{
       res=await fetch("https://api.openai.com/v1/images/generations",{
-        method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+API_KEY},
+        signal:sigFor(targetChatId),method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+API_KEY},
         body:JSON.stringify(Object.assign({model:useModel,prompt:prompt,n:1},apiSize?{size:apiSize}:{},alphaOK?{background:"transparent",output_format:"png"}:{}))});
     }
     if(!res.ok){const err=await res.json().catch(()=>({}));throw new Error(err.error?.message||`HTTP ${res.status}`)}
@@ -2015,13 +2034,13 @@ async function runImageGen(prompt,imgs,aiDiv,targetChatId){
         return JSON.stringify(b);
       };
       let res2=await fetch("https://openrouter.ai/api/v1/chat/completions",{
-        method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+API_KEY,
+        signal:sigFor(targetChatId),method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+API_KEY,
           "HTTP-Referer":"https://pgbrain.app","X-Title":"PGBrain"},
         body:mkBody(true)
       });
       if(!res2.ok&&arStr){ // model tak mendukung image_config → ulangi tanpa parameter
         res2=await fetch("https://openrouter.ai/api/v1/chat/completions",{
-          method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+API_KEY,
+          signal:sigFor(targetChatId),method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+API_KEY,
             "HTTP-Referer":"https://pgbrain.app","X-Title":"PGBrain"},
           body:mkBody(false)
         });
@@ -2048,13 +2067,13 @@ async function runImageGen(prompt,imgs,aiDiv,targetChatId){
         return JSON.stringify(body);
       };
       let res=await fetch("https://openrouter.ai/api/v1/images",{
-        method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+API_KEY,
+        signal:sigFor(targetChatId),method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+API_KEY,
           "HTTP-Referer":"https://pgbrain.app","X-Title":"PGBrain"},
         body:mkBody(true)
       });
       if(!res.ok&&arStr){ // model tak mendukung aspect_ratio → ulangi tanpa parameter
         res=await fetch("https://openrouter.ai/api/v1/images",{
-          method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+API_KEY,
+          signal:sigFor(targetChatId),method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+API_KEY,
             "HTTP-Referer":"https://pgbrain.app","X-Title":"PGBrain"},
           body:mkBody(false)
         });
@@ -2172,6 +2191,7 @@ async function sendMsg(){
   addMsg("user",label||"(lampiran)",null, (text||userText), Date.now());
   history.push({role:"user",text:userText,imgs});
   const targetChatId = recordMessage("user", text||userText);
+  chatAborters.set(targetChatId,new AbortController());
   setChatBusy(targetChatId,true);   // kunci HANYA chat ini
   // simpan lampiran gambar ke history (dikecilkan dulu), tanpa menahan alur
   if(imgs.length) imgsForHistory(imgs).then(list=>{
@@ -2183,18 +2203,22 @@ async function sendMsg(){
 
   if(MODE==="upscale"){
     try{await runUpscale(imgs,aiDiv,targetChatId)}
-    catch(e){aiDiv.classList.add("err");
+    catch(e){
+      if(e&&e.name==="AbortError"){aiDiv.innerHTML=tagHtml()+"⏹ Dihentikan. Silakan kirim perintah baru.";}
+      else{aiDiv.classList.add("err");
       const isNet=/failed to fetch|networkerror|load failed/i.test(e.message||"");
       aiDiv.innerHTML=tagHtml()+"⚠ "+esc(e.message)+"<br><small>"+(isNet
         ?"Gagal menyambung ke jembatan. Cek alamat Worker & token Replicate di Cloudflare."
-        :"Cek token Replicate di worker, atau ganti model.")+"</small>"}
+        :"Cek token Replicate di worker, atau ganti model.")+"</small>"}}
     setChatBusy(targetChatId,false);ta.focus();
     return;
   }
 
   if(MODE==="image"){
     try{await runImageGen(userText,imgs,aiDiv,targetChatId)}
-    catch(e){aiDiv.classList.add("err");
+    catch(e){
+      if(e&&e.name==="AbortError"){aiDiv.innerHTML=tagHtml()+"⏹ Dihentikan. Silakan kirim perintah baru.";setChatBusy(targetChatId,false);ta.focus();return;}
+      aiDiv.classList.add("err");
       const isNet=/failed to fetch|networkerror|load failed/i.test(e.message||"");
       const hint=isNet
         ? "Gagal menyambung ke server (bukan soal API key). Kemungkinan: koneksi internet PC ini, firewall/antivirus memblokir openrouter.ai, atau model gambar ini tak tersedia. Coba: (1) ganti model gambar, (2) coba jaringan lain, (3) pastikan bisa buka openrouter.ai di browser PC ini."
@@ -2224,7 +2248,7 @@ async function sendMsg(){
       body=buildOpenAIBody();
     }
 
-    const res=await fetch(url,{method:"POST",headers,body:JSON.stringify(body)});
+    const res=await fetch(url,{method:"POST",headers,body:JSON.stringify(body),signal:sigFor(targetChatId)});
     if(!res.ok){
       const err=await res.json().catch(()=>({}));
       throw new Error(err.error?.message||err.error?.metadata?.raw||`HTTP ${res.status}`);
@@ -2263,9 +2287,20 @@ async function sendMsg(){
       else{aiDiv.remove();}                                  // sudah pindah tab: buang gelembung nyasar
     }
   }catch(e){
-    aiDiv.classList.add("err");
-    aiDiv.innerHTML="⚠ "+esc(e.message)+"<br><small>Periksa API key, kuota harian, atau koneksi internet. Coba juga ganti model/penyedia di panel ⚙.</small>";
-    if(currentId===targetChatId)history.pop();
+    if(e&&e.name==="AbortError"){
+      if(full){ // sebagian jawaban sudah diterima: simpan yang ada
+        if(currentId===targetChatId) history.push({role:"model",text:full,imgs:null});
+        recordMessage("model",full+"\n\n_[dihentikan pengguna]_",targetChatId);
+        if(currentId===targetChatId&&document.body.contains(aiDiv))decorate(aiDiv,full,{ts:Date.now(),prompt:userText});
+      }else{
+        aiDiv.innerHTML=tagHtml()+"⏹ Dihentikan. Silakan kirim perintah baru.";
+        if(currentId===targetChatId)history.pop();
+      }
+    }else{
+      aiDiv.classList.add("err");
+      aiDiv.innerHTML="⚠ "+esc(e.message)+"<br><small>Periksa API key, kuota harian, atau koneksi internet. Coba juga ganti model/penyedia di panel ⚙.</small>";
+      if(currentId===targetChatId)history.pop();
+    }
   }
   setChatBusy(targetChatId,false);ta.focus();
 }
