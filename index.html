@@ -254,6 +254,32 @@ body::after{
 .pmodal .pcancel{background:var(--raise);border:1px solid var(--linegray);color:var(--dim);
   border-radius:12px;padding:10px 18px;font-size:13px;cursor:pointer;transition:.16s}
 .pmodal .pcancel:hover{color:var(--text);border-color:var(--line2)}
+/* ===== Panel Admin ===== */
+.pcard.admincard{width:min(760px,94vw);max-height:86vh;overflow-y:auto}
+.adtabs{display:flex;gap:8px;margin-bottom:14px}
+.adtab{background:var(--field);border:1px solid var(--linegray);color:var(--dim);border-radius:10px;
+  padding:8px 18px;font-size:13px;cursor:pointer;transition:.16s}
+.adtab.active{background:var(--grad);color:#171204;border-color:var(--gold2);font-weight:700}
+.adrow{border:1px solid var(--linegray);border-radius:13px;padding:11px 13px;margin-bottom:10px;background:var(--field)}
+.adtop{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.adtop b{color:var(--gold2);min-width:90px}
+.adrole,.adnew select{background:var(--raise);border:1px solid var(--linegray);color:var(--text);
+  border-radius:9px;padding:6px 9px;font-size:12.5px}
+.adpass,.adnew input{background:var(--raise);border:1px solid var(--linegray);color:var(--text);
+  border-radius:9px;padding:6px 10px;font-size:12.5px;width:170px}
+.adperms{display:flex;gap:6px 14px;flex-wrap:wrap;margin-top:9px}
+.pm{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--dim);cursor:pointer;user-select:none}
+.pm input{accent-color:var(--gold)}
+.adnew{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:14px;padding-top:14px;
+  border-top:1px solid var(--linegray)}
+.adnew b{color:var(--gold);font-size:13px}
+.adnote{font:11px var(--mono);color:var(--faint);margin-top:10px;min-height:14px}
+.adrange{display:flex;gap:8px;margin-bottom:12px}
+.strow{display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr 1fr;gap:8px;padding:9px 11px;
+  border-bottom:1px solid var(--linegray);font-size:13px;align-items:center}
+.strow.sthead{font:10.5px var(--mono);color:var(--faint);letter-spacing:1.5px;text-transform:uppercase;border-bottom:1px solid var(--line2)}
+.strow.sttotal{font-weight:700;color:var(--gold2);border-bottom:none;border-top:1px solid var(--line2)}
+.strow.off{opacity:.45}
 @media(max-width:640px){
   .sidebar{position:fixed;left:0;top:0;bottom:0;z-index:45;box-shadow:0 0 70px rgba(0,0,0,.8)}
   .sidebar.collapsed{width:0;border:none}
@@ -641,6 +667,7 @@ textarea::placeholder{color:var(--faint)}
     <button class="sbopen" id="sbopen" title="Buka history">☰</button>
     <div class="logo"><b>PGBrain</b><span>multi ai core</span></div>
     <div class="status"><span class="dot" id="dot"></span><span id="modelLabel">offline</span></div>
+    <button class="gear" id="adminBtn" style="display:none">👑 Admin</button>
     <button class="gear" id="gearBtn">⚙ Kunci</button>
   </header>
 
@@ -985,6 +1012,40 @@ function ago(ts){
   return new Date(ts).toLocaleDateString("id-ID");
 }
 let meName = "anggota";   // nama pembuat (dari user login)
+let ME=null;               // {u,role,perms,token} dari server akun (null = mode lokal lama)
+const ALL_MODES=["chat","think","innovate","image","upscale","code","write"];
+function HB(){ // alamat dasar worker (tanpa / di ujung); null bila belum dikonfigurasi
+  const h=CONFIG.HISTORY_URL||"";
+  return (h && !h.startsWith("__"))?h.replace(/\/+$/,""):null;
+}
+async function acctApi(path,opts){
+  const o=Object.assign({headers:{}},opts||{});
+  o.headers["Content-Type"]="application/json";
+  if(ME&&ME.token)o.headers["X-Auth"]=ME.token;
+  const r=await fetch(HB()+path,o);
+  return await r.json();
+}
+function canUse(mode){ return !ME || !Array.isArray(ME.perms) || ME.perms.includes(mode); }
+function applyPerms(){ // sembunyikan chip fitur yang tidak diizinkan utk akun ini
+  document.querySelectorAll(".modes .chip").forEach(ch=>{
+    ch.style.display=canUse(ch.dataset.mode)?"":"none";
+  });
+  if(!canUse(MODE)){ // mode aktif terlarang → pindah ke mode pertama yang boleh
+    const first=ALL_MODES.find(m=>canUse(m));
+    const chip=first&&document.querySelector('.modes .chip[data-mode="'+first+'"]');
+    if(chip)chip.click();
+  }
+  if($("adminBtn"))$("adminBtn").style.display=(ME&&ME.role==="admin")?"":"none";
+}
+function logUsage(kind,model,est){ // catat pemakaian — jalan di latar, tak mengganggu
+  if(!ME||!ME.token||!HB())return;
+  try{acctApi("/usage",{method:"POST",body:JSON.stringify({kind,model:model||"",est:(typeof est==="number"?est:0)})}).catch(()=>{});}catch(_){}
+}
+function priceOf(modelId){ // ambil estimasi harga dari label opsi model (mis. "≈$0.17")
+  const opt=[...($("textmodel")?$("textmodel").options:[])].find(o=>o.value===modelId);
+  const m=opt&&opt.textContent.match(/≈\$([\d.]+)/);
+  return m?parseFloat(m[1]):0;
+}
 
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
 
@@ -1819,6 +1880,7 @@ async function runUpscale(imgs,aiDiv,targetChatId){
     <div class="genactions"><button class="bigbtn gdl" title="Unduh">⬇</button></div>`;
   w.querySelector(".genimg").onclick=()=>openLightbox(url,name);
   recordMessage("model","[hasil upscale]",targetChatId,[url]);   // simpan ke chat ASAL permintaan
+  logUsage("upscale",UPSCALE_MODEL.id,parseFloat((UPSCALE_MODEL.price||"").replace(/[^\d.]/g,""))||0);
   w.querySelector(".gdl").onclick=async()=>{
     try{const r=await fetch(url);const b=await r.blob();const a=document.createElement("a");
       a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();
@@ -1918,6 +1980,7 @@ async function upscaleGenerated(src,scale,srcBtn){
         setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},800);}catch(_){window.open(url,"_blank")}
     };
     recordMessage("model","[hasil upscale "+scale+"×]",targetChatId,[url]);
+    logUsage("upscale",m.id,parseFloat((m.price||"").replace(/[^\d.]/g,""))||0);
     aiDiv.appendChild(w);
     scrollIfBottom();
   }catch(e){
@@ -2103,6 +2166,7 @@ async function runImageGen(prompt,imgs,aiDiv,targetChatId){
   if(images.length){
     images.forEach(u=>renderGenImage(aiDiv,u,""));
     // simpan hasil gambar ke history chat
+    logUsage("image",useModel,priceOf(useModel));
     imgsForHistory(images).then(list=>{
       recordMessage("model", text||"[gambar dihasilkan]", targetChatId, list);
       if(currentId===targetChatId && !document.body.contains(aiDiv)) openChat(targetChatId);
@@ -2147,6 +2211,7 @@ function buildOpenAIBody(){
 /* ---- kirim (streaming, semua penyedia) ---- */
 async function sendMsg(){
   if(!API_KEY)return;
+  if(!canUse(MODE)){addMsg("ai",tagHtml()+"🔒 Akun kamu tidak memiliki akses ke fitur ini. Hubungi admin.").classList.add("err");return;}
   if(chatBusy(currentId))return;   // chat INI sedang proses — chat lain tetap bebas
   const text=ta.value.trim();
   if(!text && pendingFiles.length===0)return;   // butuh teks ATAU lampiran
@@ -2280,6 +2345,7 @@ async function sendMsg(){
     else {
       if(currentId===targetChatId) history.push({role:"model",text:full,imgs:null});
       recordMessage("model",full,targetChatId);
+      logUsage("chat",MODEL,0);
       if(currentId===targetChatId){
         if(document.body.contains(aiDiv)){decorate(aiDiv,full,{ts:Date.now(),prompt:userText});}
         else openChat(targetChatId);   // pengguna sempat pergi lalu kembali: muat ulang isi chat
@@ -2328,12 +2394,29 @@ function activateProvider(p, model){
   }
 }
 /* ---- login ---- */
-function tryLogin(){
+async function tryLogin(){
   const u=$("loginUser").value.trim(), p=$("loginPass").value;
-  const ok=CONFIG.USERS.some(x=>x.u===u && x.h===sha256(p));
-  if(!ok){$("lockerr").textContent="User ID atau password salah";$("loginPass").value="";return}
+  if(HB()){ // ---- login via server akun (Worker) ----
+    $("lockerr").textContent="memeriksa…";
+    let d=null;
+    try{ d=await acctApi("/login",{method:"POST",body:JSON.stringify({u,p})}); }
+    catch(_){ }
+    if(d&&d.setup){ // belum ada akun sama sekali → login pertama menjadi ADMIN
+      if(!p||p.length<6){$("lockerr").textContent="Buat akun admin pertama: password min 6 karakter";return}
+      try{ d=await acctApi("/setup",{method:"POST",body:JSON.stringify({u,p})}); }catch(_){d=null}
+    }
+    if(d&&d.ok){
+      ME={u:d.u,role:d.role,perms:d.perms,token:d.token};
+    }else if(d){ $("lockerr").textContent=d.error||"User ID atau password salah";$("loginPass").value="";return; }
+    // d===null → worker belum di-upgrade / offline → jatuh ke daftar lokal di bawah
+  }
+  if(!ME){ // ---- fallback: daftar USERS lama di dalam aplikasi ----
+    const ok=CONFIG.USERS.some(x=>x.u===u && x.h===sha256(p));
+    if(!ok){$("lockerr").textContent="User ID atau password salah";$("loginPass").value="";return}
+  }
   $("lock").style.display="none";
-  meName=($("loginUser").value.trim()||"anggota");
+  meName=(u||"anggota");
+  applyPerms();
   if(hasBuiltin){
     if(builtinWorker()){WORKER_URL=builtinWorker(); $("workerurl").value=WORKER_URL;}
     if(HISTORY_URL) loadChats();
@@ -2344,6 +2427,101 @@ function tryLogin(){
   }
   $("input").focus();
 }
+/* ================= PANEL ADMIN ================= */
+const MODE_LABELS={chat:"💬 Ngobrol",think:"🧠 Berpikir",innovate:"💡 Inovasi",image:"🎨 Gambar",upscale:"🔍 Upscale",code:"⌨ Kode",write:"✍ Penulis"};
+function openAdmin(){
+  if(!ME||ME.role!=="admin")return;
+  document.querySelectorAll(".pmodal").forEach(x=>x.remove());
+  const ov=document.createElement("div");ov.className="pmodal";
+  ov.innerHTML=`<div class="pcard admincard">
+    <h3>👑 Panel Admin</h3>
+    <div class="adtabs">
+      <button class="adtab active" data-t="akun">Akun</button>
+      <button class="adtab" data-t="stat">Statistik</button>
+    </div>
+    <div class="adbody" id="adbody">Memuat…</div>
+  </div>`;
+  document.body.appendChild(ov);
+  ov.onclick=e=>{if(e.target===ov)ov.remove();};
+  ov.querySelectorAll(".adtab").forEach(b=>b.onclick=()=>{
+    ov.querySelectorAll(".adtab").forEach(x=>x.classList.remove("active"));
+    b.classList.add("active");
+    b.dataset.t==="akun"?adUsers(ov):adStats(ov,7);
+  });
+  adUsers(ov);
+}
+async function adUsers(ov){
+  const box=ov.querySelector("#adbody");box.innerHTML="Memuat akun…";
+  let d;try{d=await acctApi("/users",{method:"GET"});}catch(e){box.innerHTML="⚠ "+esc(e.message);return}
+  if(d.error){box.innerHTML="⚠ "+esc(d.error);return}
+  let rows="";
+  for(const u of d.users){
+    const cks=ALL_MODES.map(m=>`<label class="pm"><input type="checkbox" data-m="${m}" ${u.perms.includes(m)?"checked":""}>${MODE_LABELS[m]}</label>`).join("");
+    rows+=`<div class="adrow" data-u="${esc(u.u)}">
+      <div class="adtop">
+        <b>${esc(u.u)}</b>
+        <select class="adrole"><option value="member" ${u.role!=="admin"?"selected":""}>member</option><option value="admin" ${u.role==="admin"?"selected":""}>admin</option></select>
+        <label class="pm"><input type="checkbox" class="adactive" ${u.active?"checked":""}>aktif</label>
+        <input class="adpass" type="password" placeholder="password baru (opsional)">
+        <button class="tbtn adsave">💾 Simpan</button>
+        <button class="tbtn addel" style="color:var(--danger)">🗑</button>
+      </div>
+      <div class="adperms">${cks}</div>
+    </div>`;
+  }
+  box.innerHTML=`<div class="adlist">${rows||"Belum ada akun."}</div>
+    <div class="adnew">
+      <b>＋ Akun baru</b>
+      <input id="nuU" placeholder="username"><input id="nuP" type="password" placeholder="password (min 6)">
+      <select id="nuR"><option value="member">member</option><option value="admin">admin</option></select>
+      <button class="tbtn" id="nuGo">Buat</button>
+    </div><div class="adnote" id="adnote"></div>`;
+  const note=t=>{box.querySelector("#adnote").textContent=t;};
+  box.querySelectorAll(".adrow").forEach(row=>{
+    row.querySelector(".adsave").onclick=async()=>{
+      const b={u:row.dataset.u,role:row.querySelector(".adrole").value,
+        active:row.querySelector(".adactive").checked,
+        perms:[...row.querySelectorAll(".adperms input:checked")].map(x=>x.dataset.m)};
+      const p=row.querySelector(".adpass").value; if(p)b.p=p;
+      const r=await acctApi("/users",{method:"POST",body:JSON.stringify(b)});
+      note(r.error?("⚠ "+r.error):("✓ "+row.dataset.u+" tersimpan"));
+    };
+    row.querySelector(".addel").onclick=async()=>{
+      if(!confirm("Hapus akun \""+row.dataset.u+"\"?"))return;
+      const r=await acctApi("/users?u="+encodeURIComponent(row.dataset.u),{method:"DELETE"});
+      r.error?note("⚠ "+r.error):adUsers(ov);
+    };
+  });
+  box.querySelector("#nuGo").onclick=async()=>{
+    const r=await acctApi("/users",{method:"POST",body:JSON.stringify({
+      u:box.querySelector("#nuU").value.trim(),p:box.querySelector("#nuP").value,
+      role:box.querySelector("#nuR").value,perms:ALL_MODES})});
+    r.error?note("⚠ "+r.error):adUsers(ov);
+  };
+}
+async function adStats(ov,days){
+  const box=ov.querySelector("#adbody");
+  box.innerHTML=`<div class="adrange">
+      <button class="tbtn ${days===1?"ok":""}" data-d="1">Hari ini</button>
+      <button class="tbtn ${days===7?"ok":""}" data-d="7">7 hari</button>
+      <button class="tbtn ${days===30?"ok":""}" data-d="30">30 hari</button>
+    </div><div id="adstat">Memuat statistik…</div>`;
+  box.querySelectorAll(".adrange .tbtn").forEach(b=>b.onclick=()=>adStats(ov,+b.dataset.d));
+  let d;try{d=await acctApi("/stats?days="+days,{method:"GET"});}catch(e){box.querySelector("#adstat").innerHTML="⚠ "+esc(e.message);return}
+  if(d.error){box.querySelector("#adstat").innerHTML="⚠ "+esc(d.error);return}
+  let rows=`<div class="strow sthead"><span>Akun</span><span>💬 Chat</span><span>🎨 Gambar</span><span>🔍 Upscale</span><span>≈ Biaya</span></div>`;
+  let tC=0,tI=0,tU=0,tE=0;
+  for(const u of d.users){
+    const c=u.kinds.chat||0,i=u.kinds.image||0,up=u.kinds.upscale||0;
+    tC+=c;tI+=i;tU+=up;tE+=u.est;
+    rows+=`<div class="strow${u.active?"":" off"}"><span>${esc(u.u)}${u.role==="admin"?" 👑":""}</span><span>${c}</span><span>${i}</span><span>${up}</span><span>$${u.est.toFixed(2)}</span></div>`;
+  }
+  rows+=`<div class="strow sttotal"><span>Total</span><span>${tC}</span><span>${tI}</span><span>${tU}</span><span>$${tE.toFixed(2)}</span></div>
+    <div class="adnote">≈ Biaya = perkiraan dari label harga model gambar/upscale; pemakaian chat dicatat sebagai jumlah permintaan (biaya token tidak dihitung).</div>`;
+  box.querySelector("#adstat").innerHTML=rows;
+}
+$("adminBtn")&&($("adminBtn").onclick=openAdmin);
+
 $("loginBtn").onclick=tryLogin;
 $("loginPass").addEventListener("keydown",e=>{if(e.key==="Enter")tryLogin()});
 
