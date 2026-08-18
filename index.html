@@ -200,6 +200,20 @@ body::after{
 .chatitem.inproj{margin-left:16px;position:relative}
 .chatitem.inproj::after{content:"";position:absolute;left:-9px;top:0;bottom:0;width:1px;
   background:linear-gradient(180deg,var(--line),transparent)}
+.viewall{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:6px 2px 4px;
+  padding:9px 12px;border:1px solid var(--line2);border-radius:12px;cursor:pointer;
+  font:11px var(--mono);color:var(--gold);letter-spacing:1px;transition:.16s;user-select:none;-webkit-user-select:none}
+.viewall:hover{box-shadow:0 0 14px rgba(201,162,39,.25)}
+.viewall i{width:30px;height:16px;border-radius:99px;background:var(--field);border:1px solid var(--linegray);
+  position:relative;transition:.2s;flex-shrink:0}
+.viewall i::after{content:"";position:absolute;top:1.5px;left:2px;width:11px;height:11px;border-radius:50%;
+  background:var(--dim);transition:.2s}
+.viewall.on{background:linear-gradient(120deg,rgba(201,162,39,.14),rgba(138,109,47,.07))}
+.viewall.on i{background:var(--grad);border-color:var(--gold2)}
+.viewall.on i::after{left:15px;background:#171204}
+.owner{font:9px var(--mono);color:var(--gold2);background:rgba(201,162,39,.1);
+  border:1px solid var(--line);border-radius:999px;padding:2px 8px;flex-shrink:0;max-width:90px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:.5px}
 .projempty{font:11px var(--mono);color:var(--faint);padding:4px 12px 8px;letter-spacing:.5px}
 .projempty.in{margin-left:16px}
 .projhead.current{border-color:var(--line2);background:linear-gradient(120deg,rgba(201,162,39,.12),rgba(138,109,47,.05))}
@@ -1012,6 +1026,7 @@ function ago(ts){
   return new Date(ts).toLocaleDateString("id-ID");
 }
 let meName = "anggota";   // nama pembuat (dari user login)
+let VIEW_ALL=false;        // mode pantau admin: lihat chat SEMUA akun (baca saja)
 let ME=null;               // {u,role,perms,token} dari server akun (null = mode lokal lama)
 const ALL_MODES=["chat","think","innovate","image","upscale","code","write"];
 function HB(){ // alamat dasar worker (tanpa / di ujung); null bila belum dikonfigurasi
@@ -1052,7 +1067,8 @@ function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2
 async function loadChats(){
   if(!HISTORY_URL){$("sbsync").textContent="history lokal (tak tersambung)"; chats=JSON.parse(localStorage_getItem()||"[]"); renderChatList(); return;}
   try{
-    const r=await fetch(HISTORY_URL,{method:"GET"});
+    const h={}; if(ME&&ME.token)h["X-Auth"]=ME.token;
+    const r=await fetch(HISTORY_URL+(VIEW_ALL?"?all=1":""),{method:"GET",headers:h});
     const d=await r.json();
     chats=Array.isArray(d.chats)?d.chats:[];
     // proyek: pakai daftar dari server bila ada; kalau tidak, turunkan dari chat
@@ -1073,9 +1089,11 @@ function saveChats(){
   // debounce agar tidak spam server
   clearTimeout(saveTimer);
   saveTimer=setTimeout(async()=>{
+    if(VIEW_ALL)return; // mode pantau = baca saja, jangan menimpa milik siapa pun
     if(!HISTORY_URL){localStorage_setItem(JSON.stringify(chats));return;}
     try{
-      await fetch(HISTORY_URL,{method:"POST",headers:{"Content-Type":"application/json"},
+      const h={"Content-Type":"application/json"}; if(ME&&ME.token)h["X-Auth"]=ME.token;
+      await fetch(HISTORY_URL,{method:"POST",headers:h,
         body:JSON.stringify({chats,projects})});
       $("sbsync").textContent="tersinkron • "+chats.length+" chat";
     }catch(e){$("sbsync").textContent="gagal simpan";}
@@ -1181,6 +1199,18 @@ function renderChatList(){
     arr.forEach(c=>list.appendChild(chatRow(c)));
   };
 
+  /* ---- saklar admin: lihat semua akun ---- */
+  if(ME&&ME.role==="admin"){
+    const tg=document.createElement("div"); tg.className="viewall"+(VIEW_ALL?" on":"");
+    tg.innerHTML=`<span>👑 Semua akun</span><i></i>`;
+    tg.title=VIEW_ALL?"Kembali ke chat saya":"Pantau chat semua akun (baca saja)";
+    tg.onclick=()=>{VIEW_ALL=!VIEW_ALL;newChat();loadChats();};
+    list.appendChild(tg);
+    if(VIEW_ALL){
+      const n=document.createElement("div"); n.className="projempty";
+      n.textContent="Mode pantau — baca saja"; list.appendChild(n);
+    }
+  }
   /* ---- area PROYEK ---- */
   const ph=document.createElement("div"); ph.className="sbsection projtop";
   ph.innerHTML=`<span>📁 Proyek</span><button class="projadd" title="Buat proyek baru">＋</button>`;
@@ -1359,9 +1389,11 @@ function chatRow(c){
     +(chatBusy(c.id)?" working":"");
   el.innerHTML=`<span class="dot0"></span>`
     +`<span class="ttl" title="${esc(c.title)}">${esc(c.title)}</span>`
-    +`<button class="dots" title="Opsi">⋮</button>`;
+    +(c.owner?`<span class="owner" title="Pemilik chat">${esc(c.owner)}</span>`:"")
+    +(VIEW_ALL?"":`<button class="dots" title="Opsi">⋮</button>`);
   el.querySelector(".ttl").onclick=()=>openChat(c.id);
-  el.querySelector(".dots").onclick=(e)=>{e.stopPropagation();openMenu(e.currentTarget,c);};
+  const dts=el.querySelector(".dots");
+  if(dts)dts.onclick=(e)=>{e.stopPropagation();openMenu(e.currentTarget,c);};
   return el;
 }
 
@@ -2211,6 +2243,7 @@ function buildOpenAIBody(){
 /* ---- kirim (streaming, semua penyedia) ---- */
 async function sendMsg(){
   if(!API_KEY)return;
+  if(VIEW_ALL){addMsg("ai",tagHtml()+"👑 Mode pantau bersifat baca saja. Matikan \"Semua akun\" di sidebar untuk mengirim pesan.").classList.add("err");return;}
   if(!canUse(MODE)){addMsg("ai",tagHtml()+"🔒 Akun kamu tidak memiliki akses ke fitur ini. Hubungi admin.").classList.add("err");return;}
   if(chatBusy(currentId))return;   // chat INI sedang proses — chat lain tetap bebas
   const text=ta.value.trim();
