@@ -47,6 +47,7 @@ jobs:
       - name: Build PGBrain.exe
         run: >
           pyinstaller --onefile --noconsole --name PGBrain
+          --icon PGBrain.ico
           --add-data "index.html;."
           main.py
 
@@ -55,3 +56,77 @@ jobs:
         with:
           name: PGBrain-windows
           path: dist/PGBrain.exe
+
+  # ============================================================
+  # Versi macOS — dibangun untuk dua jenis chip:
+  #   - macos-14 = Apple Silicon (M1/M2/M3/M4)
+  #   - macos-13 = Intel (MacBook lama)
+  # ============================================================
+  build-macos:
+    strategy:
+      matrix:
+        include:
+          - os: macos-14
+            arch: apple-silicon
+          - os: macos-13
+            arch: intel
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Suntik API key dari Secrets
+        env:
+          KEY_GEMINI: ${{ secrets.KEY_GEMINI }}
+          KEY_OPENROUTER: ${{ secrets.KEY_OPENROUTER }}
+          KEY_GROQ: ${{ secrets.KEY_GROQ }}
+          KEY_OPENAI: ${{ secrets.KEY_OPENAI }}
+          NEXA_PROVIDER: ${{ secrets.NEXA_PROVIDER }}
+          NEXA_MODEL: ${{ secrets.NEXA_MODEL }}
+          WORKER_URL: ${{ secrets.WORKER_URL }}
+          HISTORY_URL: ${{ secrets.HISTORY_URL }}
+        run: |
+          python3 - << 'EOF'
+          import os
+          html = open('index.html', encoding='utf-8').read()
+          pairs = {
+            '__KEY_GEMINI__':     os.environ.get('KEY_GEMINI',''),
+            '__KEY_OPENROUTER__': os.environ.get('KEY_OPENROUTER',''),
+            '__KEY_GROQ__':       os.environ.get('KEY_GROQ',''),
+            '__KEY_OPENAI__':     os.environ.get('KEY_OPENAI',''),
+            '__NEXA_PROVIDER__':  os.environ.get('NEXA_PROVIDER',''),
+            '__NEXA_MODEL__':     os.environ.get('NEXA_MODEL',''),
+            '__WORKER_URL__':     os.environ.get('WORKER_URL',''),
+            '__HISTORY_URL__':    os.environ.get('HISTORY_URL',''),
+          }
+          for token, val in pairs.items():
+              if val:
+                  html = html.replace(token, val)
+          open('index.html', 'w', encoding='utf-8').write(html)
+          EOF
+
+      - name: Build PGBrain.app
+        # perhatikan: pemisah --add-data di macOS adalah ':' (di Windows ';')
+        run: >
+          pyinstaller --onefile --windowed --name PGBrain
+          --icon PGBrain.icns
+          --add-data "index.html:."
+          main.py
+
+      - name: Zip .app (agar izin & struktur bundle tetap utuh)
+        run: ditto -c -k --sequesterRsrc --keepParent dist/PGBrain.app PGBrain-macos-${{ matrix.arch }}.zip
+
+      - name: Upload APP
+        uses: actions/upload-artifact@v4
+        with:
+          name: PGBrain-macos-${{ matrix.arch }}
+          path: PGBrain-macos-${{ matrix.arch }}.zip
