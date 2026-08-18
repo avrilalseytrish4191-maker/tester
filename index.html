@@ -1939,6 +1939,13 @@ async function runImageGen(prompt,imgs,aiDiv,targetChatId){
   const apiSize=(()=>{ if(!IMG_SIZE)return null;
     const ar=IMG_SIZE.w/IMG_SIZE.h;
     return ar>1.15?"1536x1024":ar<0.87?"1024x1536":"1024x1024"; })();
+  // pengguna minta latar transparan? → pakai parameter alpha RESMI (bukan lewat kalimat prompt,
+  // karena model justru MELUKIS pola kotak-kotak abu-putih, bukan membuat transparan sungguhan)
+  const wantsAlpha=/transparan|transparent|tanpa\s+(latar|background)|no\s+background|remove\s+background/i.test(prompt);
+  const alphaOK=wantsAlpha && /gpt-image/i.test(useModel);
+  if(alphaOK){ // bersihkan jejak "kotak-kotak" dari niat model
+    prompt+="\n\n[Latar] Latar belakang benar-benar kosong (alpha transparan). JANGAN menggambar pola papan catur/kotak-kotak abu-putih.";
+  }
   // rasio resmi utk Gemini & OpenRouter (image_config.aspect_ratio) — dipetakan ke nilai yang didukung
   const arStr=(()=>{ if(!IMG_SIZE)return null;
     const SUP=[["1:1",1],["2:3",2/3],["3:2",3/2],["3:4",3/4],["4:3",4/3],
@@ -1977,6 +1984,7 @@ async function runImageGen(prompt,imgs,aiDiv,targetChatId){
       form.append("model",useModel);
       form.append("prompt",prompt);
       if(apiSize)form.append("size",apiSize);
+      if(alphaOK){form.append("background","transparent");form.append("output_format","png");}
       for(const im of imgs){
         const bin=Uint8Array.from(atob(im.b64),c=>c.charCodeAt(0));
         form.append("image[]",new Blob([bin],{type:im.mime}),"acuan.png");
@@ -1986,7 +1994,7 @@ async function runImageGen(prompt,imgs,aiDiv,targetChatId){
     }else{
       res=await fetch("https://api.openai.com/v1/images/generations",{
         method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+API_KEY},
-        body:JSON.stringify(Object.assign({model:useModel,prompt:prompt,n:1},apiSize?{size:apiSize}:{}))});
+        body:JSON.stringify(Object.assign({model:useModel,prompt:prompt,n:1},apiSize?{size:apiSize}:{},alphaOK?{background:"transparent",output_format:"png"}:{}))});
     }
     if(!res.ok){const err=await res.json().catch(()=>({}));throw new Error(err.error?.message||`HTTP ${res.status}`)}
     const d=await res.json();
