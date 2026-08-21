@@ -294,6 +294,25 @@ body::after{
 .strow.sthead{font:10.5px var(--mono);color:var(--faint);letter-spacing:1.5px;text-transform:uppercase;border-bottom:1px solid var(--line2)}
 .strow.sttotal{font-weight:700;color:var(--gold2);border-bottom:none;border-top:1px solid var(--line2)}
 .strow.off{opacity:.45}
+/* ===== Kunci saat gagal sinkron ===== */
+.synclock{position:fixed;inset:0;z-index:49;display:none;align-items:center;justify-content:center;
+  background:rgba(4,4,5,.82);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.synclock.show{display:flex;animation:fadein .2s ease}
+.synccard{width:min(420px,92vw);border-radius:20px;padding:28px;text-align:center;
+  background:linear-gradient(rgba(18,18,21,.95),rgba(18,18,21,.95)) padding-box,
+    linear-gradient(160deg,rgba(217,83,106,.6),rgba(201,162,39,.3)) border-box;
+  border:1px solid transparent;box-shadow:0 30px 80px rgba(0,0,0,.7);animation:rise .3s ease}
+.syncic{font-size:34px;margin-bottom:8px}
+.synccard h3{font-family:var(--disp);font-size:16px;letter-spacing:1.5px;margin-bottom:10px}
+.syncwhy{font:12px var(--mono);color:var(--danger);background:rgba(217,83,106,.08);
+  border:1px solid rgba(217,83,106,.3);border-radius:10px;padding:8px 10px;margin-bottom:12px;
+  word-break:break-word}
+.syncinfo{font-size:13px;color:var(--dim);line-height:1.7;margin-bottom:16px}
+.syncinfo .typing{margin-left:6px;vertical-align:middle}
+.syncforce{background:var(--raise);border:1px solid rgba(217,83,106,.5);color:var(--danger);
+  border-radius:12px;padding:11px 18px;font-size:13px;cursor:pointer;transition:.16s}
+.syncforce:hover{background:rgba(217,83,106,.14)}
+.syncnote{font:10.5px var(--mono);color:var(--faint);margin-top:12px;line-height:1.6}
 @media(max-width:640px){
   .sidebar{position:fixed;left:0;top:0;bottom:0;z-index:45;box-shadow:0 0 70px rgba(0,0,0,.8)}
   .sidebar.collapsed{width:0;border:none}
@@ -647,6 +666,17 @@ textarea::placeholder{color:var(--faint)}
   <img id="lbimg" alt="">
   <button class="lbclose" id="lbclose" title="Tutup">✕</button>
   <button class="bigbtn lbdl" id="lbdl" title="Unduh gambar">⬇</button>
+</div>
+<div class="synclock" id="synclock">
+  <div class="synccard">
+    <div class="syncic">⚠</div>
+    <h3>Koneksi ke server terputus</h3>
+    <p class="syncwhy" id="syncwhy">…</p>
+    <p class="syncinfo">Aplikasi dikunci sementara agar history chat tidak hilang.
+      Menyambung ulang otomatis tiap 5 detik…<span class="typing"><i></i><i></i><i></i></span></p>
+    <button class="syncforce" id="syncforce">Tetap pakai tanpa penyimpanan (berisiko)</button>
+    <p class="syncnote">⚠ Jika dipaksa: chat baru TIDAK akan tersimpan ke server sampai koneksi pulih.</p>
+  </div>
 </div>
 <div class="lock" id="lock">
   <div class="aurora2"></div>
@@ -1079,14 +1109,16 @@ async function loadChats(){
   try{
     const h={}; if(ME&&ME.token)h["X-Auth"]=ME.token;
     const r=await fetch(HISTORY_URL+(VIEW_ALL?"?all=1":""),{method:"GET",headers:h});
+    if(!r.ok){const t=await r.text().catch(()=>"");throw new Error("HTTP "+r.status+(t?" — "+t.slice(0,120):""));}
     const d=await r.json();
+    markSyncOK();
     chats=Array.isArray(d.chats)?d.chats:[];
     // proyek: pakai daftar dari server bila ada; kalau tidak, turunkan dari chat
     projects=Array.isArray(d.projects)?d.projects:[];
     normProjects();
     for(const c of chats){ if(c.project && !projByName(c.project)) projects.push({name:c.project}); }
     $("sbsync").textContent="tersinkron • "+chats.length+" chat";
-  }catch(e){ $("sbsync").textContent="gagal sinkron"; chats=[]; }
+  }catch(e){ markSyncFail(e); chats=[]; }
   renderChatList();
 }
 // fallback penyimpanan lokal via variabel memori (artifact tak izinkan localStorage)
@@ -1108,7 +1140,9 @@ async function pollSync(){
   try{
     const h={"X-Auth":ME.token};
     const r=await fetch(HISTORY_URL+(VIEW_ALL?"?all=1":""),{method:"GET",headers:h});
+    if(!r.ok){const t=await r.text().catch(()=>"");throw new Error("HTTP "+r.status+(t?" — "+t.slice(0,120):""));}
     const d=await r.json();
+    markSyncOK();
     if(Array.isArray(d.chats)){
       const server=new Map(d.chats.map(c=>[c.id,c]));
       const merged=[...d.chats];
@@ -1138,10 +1172,36 @@ async function pollSync(){
       }
       $("sbsync").textContent="tersinkron • "+chats.length+" chat";
     }
-  }catch(_){}
+  }catch(e){markSyncFail(e);}
   _syncBusy=false;
 }
 setInterval(pollSync,5000);
+
+/* ===== penjaga status sinkron ===== */
+let syncFails=0, FORCE_OFFLINE=false;
+function markSyncFail(err){
+  syncFails++;
+  const why=(err&&(err.message||String(err)))||"tidak diketahui";
+  $("sbsync").textContent="⚠ gagal sinkron";
+  if(syncFails>=2 && !FORCE_OFFLINE && $("lock").style.display==="none"){
+    $("syncwhy").textContent="Detail: "+why;
+    $("synclock").classList.add("show");   // kunci aplikasi sampai tersambung lagi
+  }
+}
+function markSyncOK(){
+  const wasDown=syncFails>=2||FORCE_OFFLINE;
+  syncFails=0;
+  if(FORCE_OFFLINE||$("synclock").classList.contains("show")){
+    FORCE_OFFLINE=false;
+    $("synclock").classList.remove("show");
+    if(wasDown){saveChats();}              // koneksi pulih → dorong perubahan yang tertahan
+  }
+}
+$("syncforce")&&($("syncforce").onclick=()=>{
+  FORCE_OFFLINE=true;
+  $("synclock").classList.remove("show");
+  $("sbsync").textContent="⚠ MODE OFFLINE — history TIDAK tersimpan";
+});
 
 let saveTimer=null;
 let lastSaveOK=0;          // kapan terakhir BERHASIL tersimpan ke server
@@ -1156,11 +1216,12 @@ function saveChats(){
     if(!HISTORY_URL){localStorage_setItem(JSON.stringify(chats));return;}
     try{
       const r=await fetch(HISTORY_URL,{method:"POST",headers:saveHeaders(),body:savePayload()});
-      if(!r.ok)throw new Error("HTTP "+r.status);
+      if(!r.ok){const t=await r.text().catch(()=>"");throw new Error("HTTP "+r.status+(t?" — "+t.slice(0,120):""));}
       lastSaveOK=Date.now();
+      markSyncOK();
       $("sbsync").textContent="tersinkron • "+chats.length+" chat";
     }catch(e){
-      $("sbsync").textContent="⚠ gagal simpan — mencoba ulang…";
+      markSyncFail(e);
       setTimeout(saveChats,4000); // coba lagi otomatis sampai berhasil
     }
   },600);
@@ -2342,6 +2403,7 @@ function buildOpenAIBody(){
 /* ---- kirim (streaming, semua penyedia) ---- */
 async function sendMsg(){
   if(!API_KEY)return;
+  if($("synclock").classList.contains("show"))return; // terkunci: tunggu koneksi pulih
   if(VIEW_ALL){addMsg("ai",tagHtml()+"👑 Mode pantau bersifat baca saja. Matikan \"Semua akun\" di sidebar untuk mengirim pesan.").classList.add("err");return;}
   if(!canUse(MODE)){addMsg("ai",tagHtml()+"🔒 Akun kamu tidak memiliki akses ke fitur ini. Hubungi admin.").classList.add("err");return;}
   if(chatBusy(currentId))return;   // chat INI sedang proses — chat lain tetap bebas
