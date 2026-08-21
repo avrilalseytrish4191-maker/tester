@@ -531,8 +531,18 @@ header{display:flex;align-items:center;gap:12px;padding:16px 2px 12px;flex-shrin
   backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
   display:none;align-items:center;justify-content:center;cursor:zoom-out}
 .lightbox.show{display:flex;animation:fadein .2s ease}
-.lightbox img{max-width:92vw;max-height:88vh;border-radius:14px;
-  box-shadow:0 34px 110px rgba(0,0,0,.8),0 0 70px rgba(201,162,39,.12)}
+.lightbox .lbstage{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  overflow:hidden;cursor:zoom-in}
+.lightbox img{max-width:92vw;max-height:88vh;border-radius:14px;user-select:none;-webkit-user-select:none;
+  box-shadow:0 34px 110px rgba(0,0,0,.8),0 0 70px rgba(201,162,39,.12);
+  transform-origin:center center;will-change:transform}
+.lbzoom{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);display:flex;align-items:center;
+  gap:4px;background:var(--raise);border:1px solid var(--line2);border-radius:14px;padding:6px;
+  box-shadow:0 10px 30px rgba(0,0,0,.55),var(--glass-hi)}
+.lbzoom button{width:36px;height:36px;border-radius:10px;background:transparent;border:1px solid transparent;
+  color:var(--text);font-size:16px;cursor:pointer;transition:.15s}
+.lbzoom button:hover{border-color:var(--line2);color:var(--gold2);background:rgba(201,162,39,.08)}
+.lbzoom span{font:12px var(--mono);color:var(--gold);min-width:52px;text-align:center;letter-spacing:.5px}
 .lightbox .lbclose{position:fixed;top:18px;right:22px;background:var(--raise);border:1px solid var(--linegray);
   color:var(--text);width:44px;height:44px;border-radius:14px;font-size:20px;cursor:pointer;transition:.16s}
 .lightbox .lbclose:hover{border-color:var(--danger);color:var(--danger);transform:rotate(90deg)}
@@ -663,8 +673,14 @@ textarea::placeholder{color:var(--faint)}
 <div class="aurora"></div>
 <div class="dropzone" id="dropzone"><span>Lepaskan file di sini 📂</span></div>
 <div class="lightbox" id="lightbox">
-  <img id="lbimg" alt="">
+  <div class="lbstage" id="lbstage"><img id="lbimg" alt="" draggable="false"></div>
   <button class="lbclose" id="lbclose" title="Tutup">✕</button>
+  <div class="lbzoom">
+    <button id="lbzout" title="Perkecil (scroll turun)">−</button>
+    <span id="lbzlvl">100%</span>
+    <button id="lbzin" title="Perbesar (scroll naik)">＋</button>
+    <button id="lbzreset" title="Ukuran pas layar (klik dua kali)">⤢</button>
+  </div>
   <button class="bigbtn lbdl" id="lbdl" title="Unduh gambar">⬇</button>
 </div>
 <div class="synclock" id="synclock">
@@ -2111,15 +2127,73 @@ function downloadDataUrl(dataUrl,filename){
   setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},800);
 }
 let lbCurrent=null; // {url,name} yang sedang tampil di lightbox
+/* ===== Lightbox dengan ZOOM: scroll = perbesar/perkecil ke arah kursor,
+   seret = geser saat diperbesar, klik-dua-kali = pas layar ⇄ 200%,
+   tombol −/＋/⤢ dan Esc utk tutup ===== */
+let lbZ=1,lbX=0,lbY=0,lbDrag=null;
+function lbApply(){
+  $("lbimg").style.transform=`translate(${lbX}px,${lbY}px) scale(${lbZ})`;
+  $("lbzlvl").textContent=Math.round(lbZ*100)+"%";
+  $("lbstage").style.cursor=lbZ>1?(lbDrag?"grabbing":"grab"):"zoom-in";
+}
+function lbReset(){lbZ=1;lbX=0;lbY=0;lbApply();}
+function lbSetZoom(nz,cx,cy){ // zoom menuju titik (cx,cy) relatif tengah layar
+  nz=Math.min(8,Math.max(1,nz));
+  if(nz===lbZ)return;
+  const k=nz/lbZ;
+  lbX=cx-(cx-lbX)*k; lbY=cy-(cy-lbY)*k;
+  lbZ=nz; if(lbZ===1){lbX=0;lbY=0;}
+  lbApply();
+}
 function openLightbox(dataUrl,name){
   lbCurrent={url:dataUrl,name};
   $("lbimg").src=dataUrl;
+  lbReset();
   $("lightbox").classList.add("show");
 }
-$("lightbox").onclick=e=>{if(e.target.id!=="lbdl")$("lightbox").classList.remove("show")};
+/* klik latar (bukan gambar/tombol) = tutup */
+$("lightbox").onclick=e=>{
+  if(e.target.id==="lightbox"||e.target.id==="lbstage")$("lightbox").classList.remove("show");
+};
 $("lbclose").onclick=()=>$("lightbox").classList.remove("show");
 $("lbdl").onclick=e=>{e.stopPropagation();if(lbCurrent)downloadDataUrl(lbCurrent.url,lbCurrent.name)};
-document.addEventListener("keydown",e=>{if(e.key==="Escape")$("lightbox").classList.remove("show")});
+/* roda mouse: zoom ke arah kursor */
+$("lbstage").addEventListener("wheel",e=>{
+  e.preventDefault();
+  const r=$("lbstage").getBoundingClientRect();
+  const cx=e.clientX-(r.left+r.width/2), cy=e.clientY-(r.top+r.height/2);
+  lbSetZoom(lbZ*(e.deltaY<0?1.2:1/1.2),cx,cy);
+},{passive:false});
+/* seret untuk menggeser saat diperbesar */
+$("lbimg").addEventListener("mousedown",e=>{
+  if(lbZ<=1)return;
+  e.preventDefault();e.stopPropagation();
+  lbDrag={x:e.clientX-lbX,y:e.clientY-lbY};lbApply();
+});
+window.addEventListener("mousemove",e=>{
+  if(!lbDrag)return;
+  lbX=e.clientX-lbDrag.x; lbY=e.clientY-lbDrag.y; lbApply();
+});
+window.addEventListener("mouseup",()=>{if(lbDrag){lbDrag=null;lbApply();}});
+/* klik gambar: dua-kali cepat = toggle zoom; sekali saat 100% = perbesar 2x */
+let lbLastClick=0;
+$("lbimg").addEventListener("click",e=>{
+  e.stopPropagation();
+  const now=Date.now(), dbl=now-lbLastClick<350; lbLastClick=now;
+  const r=$("lbstage").getBoundingClientRect();
+  const cx=e.clientX-(r.left+r.width/2), cy=e.clientY-(r.top+r.height/2);
+  if(dbl||lbZ===1){ lbZ>1?lbReset():lbSetZoom(2,cx,cy); }
+});
+$("lbzin").onclick=e=>{e.stopPropagation();lbSetZoom(lbZ*1.4,0,0);};
+$("lbzout").onclick=e=>{e.stopPropagation();lbSetZoom(lbZ/1.4,0,0);};
+$("lbzreset").onclick=e=>{e.stopPropagation();lbReset();};
+document.addEventListener("keydown",e=>{
+  if(!$("lightbox").classList.contains("show"))return;
+  if(e.key==="Escape")$("lightbox").classList.remove("show");
+  if(e.key==="+"||e.key==="=")lbSetZoom(lbZ*1.4,0,0);
+  if(e.key==="-")lbSetZoom(lbZ/1.4,0,0);
+  if(e.key==="0")lbReset();
+});
 
 function renderGenImage(aiDiv,dataUrl,caption){
   const w=document.createElement("div");
@@ -2212,11 +2286,34 @@ async function runImageGen(prompt,imgs,aiDiv,targetChatId){
   // - Kalau pengguna melampirkan gambar -> edit gambar itu.
   // - Kalau tidak, dan kalimatnya berupa PERINTAH UBAH + ada hasil sebelumnya -> edit hasil itu.
   // - Selain itu -> buat gambar baru dari nol.
-  const editRe=/(?:di|ter|meng?|me)?(ubah|rubah|ganti|edit|perbaik|sesuaik|jadikan|tambah|hapus|hilangkan|buang|kurangi|warnai|potong|crop|perbesar|perkecil|geser|pindah|kosong|remove|add|change|replace|make it|turn into)\w*/i;
+  const editRe=/(?:di|ter|meng?|me)?(ubah|rubah|ganti|edit|perbaik|sesuaik|jadikan|tambah|hapus|hilangkan|buang|kurangi|warnai|potong|crop|perbesar|perkecil|geser|pindah|kosong|ulang|regener|redo|remove|add|change|replace|make it|turn into)\w*/i;
   const refersPrev=/\b(gambar|foto|itu|tadi|tersebut|ini|sebelumnya|hasil|di ?atas)\b/i;
-  const isEdit = imgs.length>0 || (lastGen && editRe.test(prompt) && refersPrev.test(prompt));
-  if(!imgs.length && isEdit && lastGen) imgs=[lastGen];
-  if(!isEdit) imgs=[]; // permintaan baru: jangan bawa gambar lama
+  /* cari GAMBAR ACUAN dari chat INI:
+     1) hasil terakhir sesi ini (bila milik chat yang sama), atau
+     2) gambar terakhir yang tersimpan di history chat ini (tetap nyambung
+        walau aplikasi ditutup-buka atau chat sudah panjang) */
+  let prevImg=null;
+  if(lastGen && lastGen.chatId===targetChatId) prevImg=lastGen;
+  if(!prevImg){
+    const c=chats.find(x=>x.id===targetChatId);
+    if(c&&c.messages)for(let i=c.messages.length-1;i>=0;i--){
+      const m=c.messages[i];
+      if(m.role==="model"&&m.imgs&&m.imgs.length){prevImg=m.imgs[m.imgs.length-1];break;}
+    }
+  }
+  /* nyambung otomatis: dalam chat yang sudah bergambar, cukup salah satu —
+     ada kata perintah edit ATAU rujukan yang benar-benar menunjuk ke belakang.
+     Tapi kata pembuka permintaan baru ("buatkan/bikin/generate") tanpa rujukan
+     tetap dianggap gambar BARU agar tidak salah mengedit. */
+  const backRef=/\b(itu|tadi|tersebut|sebelumnya|barusan|di ?atas)\b|\b(gambar|foto|hasil|versi)\s+(itu|tadi|tersebut|sebelumnya|yang|di ?atas)|\b(ulang\w*|sekali lagi|coba lagi|redo|regener\w*)\b/i;
+  const isNewReq=/\b(buat(kan|in)?|bikin(kan|in)?|generate|ciptakan)\b/i.test(prompt) && !backRef.test(prompt);
+  const isEdit = imgs.length>0 || (!!prevImg && !isNewReq && (editRe.test(prompt) || backRef.test(prompt)));
+  if(!imgs.length && isEdit && prevImg){
+    if(typeof prevImg==="string"){ // dari history: URL / data URL → ubah ke format kirim
+      try{const p=await imgRefToPart(prevImg); if(p)imgs.push(p);}catch(_){}
+    }else imgs.push(prevImg);
+  }
+  if(!isEdit) imgs=[]; // permintaan benar-benar baru: jangan bawa gambar lama
   // ukuran pilihan pengguna → disuntik sebagai instruksi (berlaku semua penyedia)
   if(IMG_SIZE){
     const g=(a,b)=>b?g(b,a%b):a, k=g(IMG_SIZE.w,IMG_SIZE.h);
@@ -2400,7 +2497,7 @@ async function runImageGen(prompt,imgs,aiDiv,targetChatId){
       if(currentId===targetChatId && !document.body.contains(aiDiv)) openChat(targetChatId);
     });
     const [meta,b64]=images[0].split(",");
-    lastGen={mime:(meta.match(/data:(.*?);/)||[,"image/png"])[1],b64};
+    lastGen={mime:(meta.match(/data:(.*?);/)||[,"image/png"])[1],b64,chatId:targetChatId};
   }else if(!text){
     aiDiv.classList.add("err");
     aiDiv.innerHTML=tagHtml()+"Tidak ada gambar yang dihasilkan. Coba perjelas perintahnya, atau permintaan ditolak kebijakan keamanan.";
