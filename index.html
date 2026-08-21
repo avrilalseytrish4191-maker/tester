@@ -1113,6 +1113,8 @@ async function loadChats(){
     const d=await r.json();
     markSyncOK();
     chats=Array.isArray(d.chats)?d.chats:[];
+    if(d.del)chats=chats.filter(c=>!d.del[c.id]);   // saring nisan di sisi aplikasi
+    slimHistory();                                   // rampingkan gambar lama yang kegemukan
     // proyek: pakai daftar dari server bila ada; kalau tidak, turunkan dari chat
     projects=Array.isArray(d.projects)?d.projects:[];
     normProjects();
@@ -1143,6 +1145,7 @@ async function pollSync(){
     if(!r.ok){const t=await r.text().catch(()=>"");throw new Error("HTTP "+r.status+(t?" — "+t.slice(0,120):""));}
     const d=await r.json();
     markSyncOK();
+    if(d.del&&Array.isArray(d.chats))d.chats=d.chats.filter(c=>!d.del[c.id]);
     if(Array.isArray(d.chats)){
       const server=new Map(d.chats.map(c=>[c.id,c]));
       const merged=[...d.chats];
@@ -1176,6 +1179,37 @@ async function pollSync(){
   _syncBusy=false;
 }
 setInterval(pollSync,5000);
+
+/* ===== perawatan: rampingkan gambar lama di history agar server tetap ringan ===== */
+let _slimming=false;
+async function slimHistory(){
+  if(_slimming||VIEW_ALL||!HB()||!ME)return;
+  _slimming=true;
+  try{
+    let changed=0;
+    for(const c of chats)for(const m of (c.messages||[])){
+      if(!m.imgs)continue;
+      for(let i=0;i<m.imgs.length;i++){
+        const im=m.imgs[i];
+        if(typeof im==="string"&&im.startsWith("data:")&&im.length>220000){
+          const mm=im.match(/^data:(.*?);base64,(.*)$/);
+          if(!mm)continue;
+          try{
+            const s=await shrinkImage(mm[1],mm[2],HIST_IMG_LIMIT,HIST_IMG_COMBOS);
+            m.imgs[i]=`data:${s.mime};base64,${s.b64}`;changed++;
+          }catch(_){}
+        }
+      }
+    }
+    if(changed){
+      $("sbsync").textContent="merampingkan history… ("+changed+" gambar)";
+      const r=await fetch(HISTORY_URL,{method:"POST",headers:saveHeaders(),
+        body:JSON.stringify({chats,projects,deleted:deletedIds,replace:true})});
+      if(r.ok){lastSaveOK=Date.now();$("sbsync").textContent="tersinkron • "+chats.length+" chat";}
+    }
+  }catch(_){}
+  _slimming=false;
+}
 
 /* ===== penjaga status sinkron ===== */
 let syncFails=0, FORCE_OFFLINE=false;
@@ -1303,6 +1337,8 @@ function recordMessage(role,text,targetId,imgs){
 
 // Kecilkan gambar untuk disimpan di history (hemat ruang penyimpanan tim).
 // URL http(s) disimpan apa adanya karena sudah ringan.
+const HIST_IMG_LIMIT=140000; // ±140 KB per gambar di history — cukup utk pratinjau
+const HIST_IMG_COMBOS=[[640,.72],[512,.68],[420,.62],[320,.58]];
 async function imgsForHistory(list){
   const out=[];
   for(const im of (list||[])){
@@ -1310,10 +1346,10 @@ async function imgsForHistory(list){
       if(im.startsWith("http")){out.push(im);continue;}
       const m=im.match(/^data:(.*?);base64,(.*)$/);
       if(!m){out.push(im);continue;}
-      try{const s=await shrinkImage(m[1],m[2]);out.push(`data:${s.mime};base64,${s.b64}`);}
+      try{const s=await shrinkImage(m[1],m[2],HIST_IMG_LIMIT,HIST_IMG_COMBOS);out.push(`data:${s.mime};base64,${s.b64}`);}
       catch(_){out.push(im);}
     }else if(im&&im.b64){
-      try{const s=await shrinkImage(im.mime,im.b64);out.push(`data:${s.mime};base64,${s.b64}`);}
+      try{const s=await shrinkImage(im.mime,im.b64,HIST_IMG_LIMIT,HIST_IMG_COMBOS);out.push(`data:${s.mime};base64,${s.b64}`);}
       catch(_){out.push(`data:${im.mime};base64,${im.b64}`);}
     }
   }
@@ -1987,11 +2023,11 @@ $("workerurl").oninput=e=>{WORKER_URL=e.target.value.trim().replace(/\/$/,"")};
 
 // Kecilkan gambar sampai data URL < ~0.9MB (batas aman Replicate untuk data URI).
 // Turunkan dimensi & kualitas bertahap. Untuk upscale ini ideal: mulai kecil, perbesar.
-function shrinkImage(mime,b64){
+function shrinkImage(mime,b64,limitBytes,combosOpt){
   return new Promise((resolve)=>{
     const img=new Image();
     img.onload=()=>{
-      const LIMIT=900000; // ~0.9 MB dalam byte (perkiraan dari panjang base64)
+      const LIMIT=limitBytes||900000; // bawaan ~0.9 MB (untuk kirim ke API)
       const tryAt=(maxSide,q)=>{
         let {width:w,height:h}=img;
         const s=Math.min(1,maxSide/Math.max(w,h));
@@ -2001,7 +2037,7 @@ function shrinkImage(mime,b64){
         return c.toDataURL("image/jpeg",q);
       };
       // coba beberapa kombinasi sampai cukup kecil
-      const combos=[[1280,.85],[1024,.82],[900,.8],[768,.78],[640,.75],[512,.72]];
+      const combos=combosOpt||[[1280,.85],[1024,.82],[900,.8],[768,.78],[640,.75],[512,.72]];
       let url=tryAt(1280,.85);
       for(const [side,q] of combos){
         url=tryAt(side,q);
