@@ -1112,13 +1112,19 @@ async function pollSync(){
     if(Array.isArray(d.chats)){
       const server=new Map(d.chats.map(c=>[c.id,c]));
       const merged=[...d.chats];
+      let butuhSimpan=false;
       for(const c of chats){                 // pertahankan yang lebih baru / sedang berjalan di sini
         const s=server.get(c.id);
-        if(chatBusy(c.id) || (!s && (Date.now()-mtOf(c)<15000)) || (s && mtOf(c)>mtOf(s))){
+        // chat lokal boleh dianggap "dihapus di perangkat lain" HANYA bila
+        // pernah ada save sukses SETELAH perubahan terakhirnya (artinya server memang pernah punya)
+        const belumTersimpan=!s && lastSaveOK<mtOf(c);
+        if(chatBusy(c.id) || belumTersimpan || (s && mtOf(c)>mtOf(s))){
           const i=merged.findIndex(x=>x.id===c.id);
           i>=0?merged[i]=c:merged.unshift(c);
+          if(belumTersimpan)butuhSimpan=true;
         }
       }
+      if(butuhSimpan)saveChats(); // ada yang tercecer → dorong ke server sekarang
       const openBefore=currentId?JSON.stringify((chats.find(x=>x.id===currentId)||{}).messages||[]).length:0;
       chats=merged.filter(c=>!deletedIds.includes(c.id));
       if(!VIEW_ALL && Array.isArray(d.projects)){projects=d.projects;normProjects();}
@@ -1138,20 +1144,35 @@ async function pollSync(){
 setInterval(pollSync,5000);
 
 let saveTimer=null;
+let lastSaveOK=0;          // kapan terakhir BERHASIL tersimpan ke server
+function savePayload(){return JSON.stringify({chats,projects,deleted:deletedIds});}
+function saveHeaders(){const h={"Content-Type":"application/json"};if(ME&&ME.token)h["X-Auth"]=ME.token;return h;}
 function saveChats(){
   // debounce agar tidak spam server
   clearTimeout(saveTimer);
   saveTimer=setTimeout(async()=>{
+    saveTimer=null; // PENTING: nol-kan agar mesin sinkron tidak terkunci selamanya
     if(VIEW_ALL)return; // mode pantau = baca saja, jangan menimpa milik siapa pun
     if(!HISTORY_URL){localStorage_setItem(JSON.stringify(chats));return;}
     try{
-      const h={"Content-Type":"application/json"}; if(ME&&ME.token)h["X-Auth"]=ME.token;
-      await fetch(HISTORY_URL,{method:"POST",headers:h,
-        body:JSON.stringify({chats,projects,deleted:deletedIds})});
+      const r=await fetch(HISTORY_URL,{method:"POST",headers:saveHeaders(),body:savePayload()});
+      if(!r.ok)throw new Error("HTTP "+r.status);
+      lastSaveOK=Date.now();
       $("sbsync").textContent="tersinkron • "+chats.length+" chat";
-    }catch(e){$("sbsync").textContent="gagal simpan";}
+    }catch(e){
+      $("sbsync").textContent="⚠ gagal simpan — mencoba ulang…";
+      setTimeout(saveChats,4000); // coba lagi otomatis sampai berhasil
+    }
   },600);
 }
+/* simpan PAKSA saat aplikasi ditutup / disembunyikan — jangan tunggu debounce */
+function flushSave(){
+  if(VIEW_ALL||!HISTORY_URL)return;
+  clearTimeout(saveTimer); saveTimer=null;
+  try{fetch(HISTORY_URL,{method:"POST",headers:saveHeaders(),body:savePayload(),keepalive:true});}catch(_){}
+}
+window.addEventListener("beforeunload",flushSave);
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden")flushSave();});
 
 function currentChat(){return chats.find(c=>c.id===currentId);}
 
