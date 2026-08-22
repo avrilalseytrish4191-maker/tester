@@ -1970,7 +1970,19 @@ function md(s){
   s=s.replace(/^\s*[\*\-]\s+(.+)$/gm,"• $1");
   return s;
 }
-function tagHtml(){return `<span class="tag">PGBrain · ${PROVIDERS[PROVIDER].label}</span>`}
+const MODE_NAMES={chat:"Ngobrol",think:"Berpikir Dalam",innovate:"Inovasi",image:"Buat Gambar",upscale:"Upscale",code:"Kode",write:"Penulis"};
+function niceModelName(id){ // nama tampil: ambil bagian sebelum " — " dari label katalog bila ada
+  for(const p of Object.values(PROVIDERS))
+    for(const m of (p.models||[]))
+      if(m[0]===id) return m[1].split(" — ")[0];
+  return (id||"").split("/").pop();
+}
+function tagHtml(){
+  const parts=["PGBrain",PROVIDERS[PROVIDER].label,MODE_NAMES[MODE]||MODE];
+  const aktifModel=(MODE==="image")?IMAGE_MODEL:(MODE==="upscale")?(UPSCALE_MODEL&&UPSCALE_MODEL.id):MODEL;
+  if(aktifModel)parts.push(niceModelName(aktifModel));
+  return `<span class="tag">${parts.map(esc).join(" · ")}</span>`;
+}
 function addMsg(role,html,imgUrl,quoteSource,ts){
   $("empty")&&$("empty").remove();
   const d=document.createElement("div");
@@ -2214,7 +2226,7 @@ async function runUpscale(imgs,aiDiv,targetChatId){
   let url=data.output;
   if(Array.isArray(url)) url=url[0];
   if(!url) throw new Error("Tidak ada hasil dari model.");
-  aiDiv.innerHTML=`<span class="tag">PGBrain · 🔍 ${m.id.split("/").pop()}${m.scaleKey?" · "+UPSCALE_SCALE+"×":""}</span>`;
+  aiDiv.innerHTML=`<span class="tag">PGBrain · ${PROVIDERS[PROVIDER].label} · ${MODE_NAMES.upscale} · ${esc((m.label||m.id).split(" — ")[0])}${m.scaleKey?" · "+UPSCALE_SCALE+"×":""}</span>`;
   // tampilkan hasil (URL gambar) + tombol unduh
   const w=document.createElement("div"); w.className="genwrap";
   const name=`pgbrain-upscale-${genCounter++}.png`;
@@ -2368,7 +2380,7 @@ async function upscaleGenerated(src,scale,srcBtn){
     const data=await res.json();
     let url=data.output; if(Array.isArray(url))url=url[0];
     if(!url)throw new Error("Tidak ada hasil dari model.");
-    aiDiv.innerHTML=`<span class="tag">PGBrain · 🔍 ${m.id.split("/").pop()} · ${scale}×</span>`;
+    aiDiv.innerHTML=`<span class="tag">PGBrain · ${PROVIDERS[PROVIDER].label} · ${MODE_NAMES.upscale} · ${esc((m.label||m.id).split(" — ")[0])} · ${scale}×</span>`;
     const w=document.createElement("div"); w.className="genwrap";
     const name=`pgbrain-upscale-${genCounter++}.png`;
     w.innerHTML=`<img class="genimg" src="${url}" alt="" title="Klik untuk memperbesar">
@@ -2607,7 +2619,7 @@ async function runImageGen(prompt,imgs,aiDiv,targetChatId){
     }
     if(data.text)text=data.text;
   }
-  const imTag=`<span class="tag">PGBrain · 🎨 ${useModel.split("/").pop()}</span>`;
+  const imTag=`<span class="tag">PGBrain · ${PROVIDERS[PROVIDER].label} · ${MODE_NAMES.image} · ${esc(niceModelName(useModel))}</span>`;
   aiDiv.innerHTML=imTag+(text?md(text):"");
   if(images.length){
     images.forEach(u=>renderGenImage(aiDiv,u,""));
