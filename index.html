@@ -1289,7 +1289,7 @@ async function pollSync(){
       const openBefore=currentId?JSON.stringify((chats.find(x=>x.id===currentId)||{}).messages||[]).length:0;
       chats=merged.filter(c=>!deletedIds.includes(c.id));
       if(!VIEW_ALL && Array.isArray(d.projects)){
-        if(lastSaveOK>=projectsMt){            // perubahan proyek lokal sudah pernah tersimpan → aman ikut server
+        if(lastSaveOK>=projectsMt && !document.querySelector(".pmodal")){ // aman ikut server (dan tak ada dialog terbuka)
           projects=d.projects;normProjects();
         }else{                                 // proyek lokal lebih baru & belum tersimpan → pertahankan, dorong ke server
           saveChats();
@@ -1579,7 +1579,9 @@ function projectDialog(judul,data,cb){
   document.body.appendChild(ov);
   const nameIn=ov.querySelector(".pname-in"), descIn=ov.querySelector(".pdesc-in");
   const close=()=>ov.remove();
-  ov.onclick=(e)=>{if(e.target===ov)close();};
+  let downOnOv=false;
+  ov.onmousedown=(e)=>{downOnOv=(e.target===ov);};
+  ov.onclick=(e)=>{if(e.target===ov&&downOnOv)close();};
   ov.querySelector(".pcancel").onclick=close;
   const save=()=>{
     const name=nameIn.value.trim();
@@ -1632,6 +1634,8 @@ function showProjectHome(pname){
 }
 
 function openProjectMenu(anchor,p){
+  const pname=p.name; // pegang NAMA, bukan objek — objek bisa basi karena sinkron
+  const fresh=()=>projByName(pname);
   document.querySelectorAll(".ctxmenu").forEach(m=>m.remove());
   const m=document.createElement("div"); m.className="ctxmenu";
   m.innerHTML=`
@@ -1646,40 +1650,41 @@ function openProjectMenu(anchor,p){
   m.style.left=Math.min(r.left, window.innerWidth-m.offsetWidth-10)+"px";
   m.querySelector(".prn").onclick=()=>{
     m.remove();
-    projectDialog("Edit detail proyek",p,(nn,desc)=>{
-      if(nn!==p.name){
+    projectDialog("Edit detail proyek",fresh()||p,(nn,desc)=>{
+      const cur=fresh(); if(!cur){alert("Proyek tidak ditemukan (mungkin diubah di perangkat lain).");return;}
+      if(nn!==cur.name){
         if(projByName(nn)){alert("Nama \""+nn+"\" sudah dipakai proyek lain.");return;}
-        chats.forEach(c=>{if(c.project===p.name)c.project=nn;});
-        projOpen[nn]=projOpen[p.name];
-        if(activeProject===p.name)activeProject=nn;
-        p.name=nn;
+        chats.forEach(c=>{if(c.project===cur.name){c.project=nn;touch(c);}});
+        projOpen[nn]=projOpen[cur.name];
+        if(activeProject===cur.name)activeProject=nn;
+        cur.name=nn;
       }
-      p.desc=desc; touchProjects();
+      cur.desc=desc; touchProjects();
       saveChats();renderChatList();
-      if(activeProject===p.name && !currentId) showProjectHome(p.name);
+      if(activeProject===cur.name && !currentId) showProjectHome(cur.name);
     });
   };
   m.querySelector(".par").onclick=()=>{
-    p.archived=!p.archived; touchProjects();
-    saveChats();renderChatList();m.remove();
+    const cur=fresh(); if(cur){cur.archived=!cur.archived; touchProjects(); saveChats();renderChatList();}
+    m.remove();
   };
   m.querySelector(".pout").onclick=()=>{
-    if(confirm("Bubarkan proyek \""+p.name+"\"? Chat di dalamnya TIDAK dihapus, hanya dikeluarkan ke daftar biasa.")){
-      chats.forEach(c=>{if(c.project===p.name){delete c.project;touch(c);}});
-      projects=projects.filter(x=>x!==p); touchProjects();
-      if(activeProject===p.name){activeProject=null;newChat();}
+    if(confirm("Bubarkan proyek \""+pname+"\"? Chat di dalamnya TIDAK dihapus, hanya dikeluarkan ke daftar biasa.")){
+      chats.forEach(c=>{if(c.project===pname){delete c.project;touch(c);}});
+      projects=projects.filter(x=>x.name!==pname); touchProjects();
+      if(activeProject===pname){activeProject=null;newChat();}
       saveChats();renderChatList();
     }
     m.remove();
   };
   m.querySelector(".pds").onclick=()=>{
-    const n=chats.filter(c=>c.project===p.name).length;
-    if(confirm("Hapus proyek \""+p.name+"\" BESERTA "+n+" chat di dalamnya? Ini menghapus untuk semua anggota tim dan tidak bisa dibatalkan.")){
-      const ids=new Set(chats.filter(c=>c.project===p.name).map(c=>c.id));
+    const n=chats.filter(c=>c.project===pname).length;
+    if(confirm("Hapus proyek \""+pname+"\" BESERTA "+n+" chat di dalamnya? Ini menghapus untuk semua anggota tim dan tidak bisa dibatalkan.")){
+      const ids=new Set(chats.filter(c=>c.project===pname).map(c=>c.id));
       deletedIds.push(...ids);
       chats=chats.filter(c=>!ids.has(c.id));
-      projects=projects.filter(x=>x!==p); touchProjects();
-      if(ids.has(currentId)||activeProject===p.name){activeProject=null;newChat();}
+      projects=projects.filter(x=>x.name!==pname); touchProjects();
+      if(ids.has(currentId)||activeProject===pname){activeProject=null;newChat();}
       saveChats();renderChatList();
     }
     m.remove();
