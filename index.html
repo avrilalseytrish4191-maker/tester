@@ -1439,6 +1439,8 @@ function openChat(id){
       history.push({role:"user",text:m.text,imgs:null});
     }else{
       box=addMsg("ai",md(m.text||""));
+      const tHist=tagFromBy(m.by);
+      if(tHist){const el=box.querySelector(".tag"); if(el)el.innerHTML=tHist;}
       decorate(box,m.text||"",{ts:m.ts,prompt:lastUserText,img:(m.imgs&&m.imgs[0])||null});
       history.push({role:"model",text:m.text,imgs:null});
     }
@@ -1450,7 +1452,14 @@ function openChat(id){
 // simpan pesan ke chat aktif (buat chat baru bila belum ada)
 // role, text, targetId(opsional). Mengembalikan id chat tujuan.
 // targetId mengunci balasan AI ke chat asal, meski pengguna pindah tab.
-function recordMessage(role,text,targetId,imgs){
+function tagFromBy(by){ // rakit label dari rekaman history (bukan pengaturan saat ini)
+  if(!by)return null;
+  const parts=["PGBrain",(PROVIDERS[by.prov]&&PROVIDERS[by.prov].label)||by.prov||"?",MODE_NAMES[by.mode]||by.mode||""];
+  if(by.model)parts.push(niceModelName(by.model));
+  if(by.scale)parts.push(by.scale+"×");
+  return parts.filter(Boolean).map(esc).join(" · ");
+}
+function recordMessage(role,text,targetId,imgs,by){
   let c = targetId ? chats.find(x=>x.id===targetId) : currentChat();
   if(!c){
     c={id:uid(),title:(text||"Chat baru").slice(0,40),author:meName,pinned:false,archived:false,ts:Date.now(),messages:[]};
@@ -1460,6 +1469,10 @@ function recordMessage(role,text,targetId,imgs){
     if(!targetId && currentId===null) currentId=c.id;
   }
   const msg={role,text,ts:Date.now()};
+  if(role==="model"){ // rekam model yang menjawab — agar label tak berubah saat replay
+    msg.by=by||{prov:PROVIDER,mode:MODE,
+      model:(MODE==="image")?IMAGE_MODEL:(MODE==="upscale")?((UPSCALE_MODEL||{}).id):MODEL};
+  }
   if(imgs&&imgs.length) msg.imgs=imgs;   // simpan gambar agar tetap ada saat chat dibuka lagi
   c.messages.push(msg); c.ts=Date.now(); c.mt=Date.now();
   if(c.messages.length===1) c.title=(text||"Chat baru").slice(0,40);
@@ -2233,7 +2246,7 @@ async function runUpscale(imgs,aiDiv,targetChatId){
   w.innerHTML=`<img class="genimg" src="${url}" alt="" title="Klik untuk memperbesar">
     <div class="genactions"><button class="bigbtn gdl" title="Unduh">⬇</button></div>`;
   w.querySelector(".genimg").onclick=()=>openLightbox(url,name);
-  recordMessage("model","[hasil upscale]",targetChatId,[url]);   // simpan ke chat ASAL permintaan
+  recordMessage("model","[hasil upscale]",targetChatId,[url],{prov:PROVIDER,mode:"upscale",model:m.id,scale:UPSCALE_SCALE});   // simpan ke chat ASAL permintaan
   logUsage("upscale",UPSCALE_MODEL.id,parseFloat((UPSCALE_MODEL.price||"").replace(/[^\d.]/g,""))||0);
   w.querySelector(".gdl").onclick=async()=>{
     try{const r=await fetch(url);const b=await r.blob();const a=document.createElement("a");
@@ -2391,7 +2404,7 @@ async function upscaleGenerated(src,scale,srcBtn){
         a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();
         setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},800);}catch(_){window.open(url,"_blank")}
     };
-    recordMessage("model","[hasil upscale "+scale+"×]",targetChatId,[url]);
+    recordMessage("model","[hasil upscale "+scale+"×]",targetChatId,[url],{prov:PROVIDER,mode:"upscale",model:m.id,scale});
     logUsage("upscale",m.id,parseFloat((m.price||"").replace(/[^\d.]/g,""))||0);
     aiDiv.appendChild(w);
     scrollIfBottom();
@@ -2625,8 +2638,9 @@ async function runImageGen(prompt,imgs,aiDiv,targetChatId){
     images.forEach(u=>renderGenImage(aiDiv,u,""));
     // simpan hasil gambar ke history chat
     logUsage("image",useModel,priceOf(useModel));
+    const imgBy={prov:PROVIDER,mode:"image",model:useModel};
     imgsForHistory(images).then(list=>{
-      recordMessage("model", text||"[gambar dihasilkan]", targetChatId, list);
+      recordMessage("model", text||"[gambar dihasilkan]", targetChatId, list, imgBy);
       if(currentId===targetChatId && !document.body.contains(aiDiv)) openChat(targetChatId);
     });
     const [meta,b64]=images[0].split(",");
@@ -2636,7 +2650,7 @@ async function runImageGen(prompt,imgs,aiDiv,targetChatId){
     aiDiv.innerHTML=tagHtml()+"Tidak ada gambar yang dihasilkan. Coba perjelas perintahnya, atau permintaan ditolak kebijakan keamanan.";
   }
   if(currentId===targetChatId)history.push({role:"model",text:(text||"[gambar dihasilkan]"),imgs:null});
-  if(!images.length) recordMessage("model", text||"[tidak ada gambar]", targetChatId);
+  if(!images.length) recordMessage("model", text||"[tidak ada gambar]", targetChatId, null, {prov:PROVIDER,mode:"image",model:useModel});
   scrollIfBottom();
 }
 /* ---- format permintaan per penyedia ---- */
@@ -2717,6 +2731,7 @@ async function sendMsg(){
   addMsg("user",label||"(lampiran)",null, (text||userText), Date.now());
   history.push({role:"user",text:userText,imgs});
   const targetChatId = recordMessage("user", text||userText);
+  const sentBy={prov:PROVIDER,mode:MODE,model:MODEL}; // identitas saat KIRIM (anti berubah di tengah proses)
   chatAborters.set(targetChatId,new AbortController());
   setChatBusy(targetChatId,true);   // kunci HANYA chat ini
   // simpan lampiran gambar ke history (dikecilkan dulu), tanpa menahan alur
@@ -2805,7 +2820,7 @@ async function sendMsg(){
     if(!full){aiDiv.classList.add("err");aiDiv.innerHTML="Tidak ada respons. Permintaan mungkin ditolak kebijakan keamanan penyedia — coba ubah kalimatnya, atau ganti model di panel ⚙."}
     else {
       if(currentId===targetChatId) history.push({role:"model",text:full,imgs:null});
-      recordMessage("model",full,targetChatId);
+      recordMessage("model",full,targetChatId,null,sentBy);
       logUsage("chat",MODEL,priceOf(MODEL));
       if(currentId===targetChatId){
         if(document.body.contains(aiDiv)){decorate(aiDiv,full,{ts:Date.now(),prompt:userText});}
@@ -2817,7 +2832,7 @@ async function sendMsg(){
     if(e&&e.name==="AbortError"){
       if(full){ // sebagian jawaban sudah diterima: simpan yang ada
         if(currentId===targetChatId) history.push({role:"model",text:full,imgs:null});
-        recordMessage("model",full+"\n\n_[dihentikan pengguna]_",targetChatId);
+        recordMessage("model",full+"\n\n_[dihentikan pengguna]_",targetChatId,null,sentBy);
         if(currentId===targetChatId&&document.body.contains(aiDiv))decorate(aiDiv,full,{ts:Date.now(),prompt:userText});
       }else{
         aiDiv.innerHTML=tagHtml()+"⏹ Dihentikan. Silakan kirim perintah baru.";
