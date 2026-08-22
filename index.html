@@ -949,10 +949,11 @@ const PROVIDERS={
     label:"Gemini",
     keyUrl:"https://aistudio.google.com/apikey",
     models:[
-      ["gemini-3.1-pro","Gemini 3.1 Pro — penalaran terdalam, riset & dokumen raksasa",["think","innovate","code"]],
-      ["gemini-3.6-flash","Gemini 3.6 Flash — serbaguna & cepat: koding, chat harian",["chat","code","innovate","write"]],
-      ["gemini-3.5-flash-lite","Gemini 3.5 Flash-Lite — tercepat & termurah, tanya-jawab ringan",["chat"]],
-      ["gemini-2.5-pro","Gemini 2.5 Pro — penalaran kuat harga murah, tulisan rapi",["think","write"]],
+      ["gemini-3.5-flash-lite","Gemini 3.5 Flash-Lite — tercepat & termurah, tanya-jawab ringan",["chat"],"","","≈$0.0005/jwb"],
+      ["gemini-2.5-flash","Gemini 2.5 Flash — generasi lama yang hemat & masih tangguh",["chat","code","write"],"","","≈$0.002/jwb"],
+      ["gemini-3.6-flash","Gemini 3.6 Flash — serbaguna & cepat: koding, chat harian",["chat","code","innovate","write"],"","","≈$0.003/jwb"],
+      ["gemini-2.5-pro","Gemini 2.5 Pro — penalaran kuat generasi lama, tulisan rapi",["think","write"],"","","≈$0.008/jwb"],
+      ["gemini-3.1-pro","Gemini 3.1 Pro — penalaran terdalam, riset & dokumen raksasa",["think","innovate","code"],"","","≈$0.015/jwb"],
       // ---- model gambar (tag "image") ----
       ["gemini-3.1-flash-image","Nano Banana 2 — cepat & hemat",["image"],"BUAT GAMBAR BARU","~5-8 dtk","≈$0.04"],
       ["gemini-3-pro-image","Nano Banana Pro — kualitas tertinggi & teks rapi",["image"],"BUAT GAMBAR BARU","~10-20 dtk","≈$0.13"],
@@ -964,12 +965,17 @@ const PROVIDERS={
     label:"OpenRouter",
     keyUrl:"https://openrouter.ai/keys",
     models:[
-      ["anthropic/claude-opus-5","Claude Opus 5 — kelas tertinggi: penalaran & koding tersulit",["think","code","innovate"]],
-      ["anthropic/claude-sonnet-5","Claude Sonnet 5 — koding serius & tulisan berkualitas",["code","write","chat"]],
-      ["anthropic/claude-haiku-4.5","Claude Haiku 4.5 — cepat & hemat, chat harian",["chat"]],
-      ["openai/gpt-5.1","GPT-5.1 — serbaguna premium: percakapan & ide",["chat","innovate","write"]],
-      ["google/gemini-3.1-pro","Gemini 3.1 Pro — konteks terpanjang, baca dokumen/kode besar",["think","code"]],
-      ["deepseek/deepseek-v4-pro","DeepSeek V4 Pro — koding & matematika termurah",["code","think"]],
+      ["meta-llama/llama-3.3-70b-instruct","Llama 3.3 70B — open-source termurah, chat harian",["chat"],"","","≈$0.0006/jwb"],
+      ["deepseek/deepseek-chat","DeepSeek Chat — generasi lama super hemat",["chat","code"],"","","≈$0.001/jwb"],
+      ["deepseek/deepseek-v4-pro","DeepSeek V4 Pro — koding & matematika termurah di kelasnya",["code","think"],"","","≈$0.002/jwb"],
+      ["google/gemini-2.5-flash","Gemini 2.5 Flash — generasi lama hemat & cepat",["chat","code"],"","","≈$0.002/jwb"],
+      ["openai/gpt-5-mini","GPT-5 mini — generasi lama hemat utk tulisan ringan",["chat","write"],"","","≈$0.002/jwb"],
+      ["anthropic/claude-haiku-4.5","Claude Haiku 4.5 — cepat & hemat, chat harian",["chat"],"","","≈$0.006/jwb"],
+      ["anthropic/claude-sonnet-4.5","Claude Sonnet 4.5 — generasi lama, tetap tangguh utk koding",["code","write"],"","","≈$0.012/jwb"],
+      ["openai/gpt-5.1","GPT-5.1 — serbaguna premium: percakapan & ide",["chat","innovate","write"],"","","≈$0.012/jwb"],
+      ["google/gemini-3.1-pro","Gemini 3.1 Pro — konteks terpanjang, baca dokumen/kode besar",["think","code"],"","","≈$0.015/jwb"],
+      ["anthropic/claude-sonnet-5","Claude Sonnet 5 — koding serius & tulisan berkualitas",["code","write","chat"],"","","≈$0.018/jwb"],
+      ["anthropic/claude-opus-5","Claude Opus 5 — kelas tertinggi: penalaran & koding tersulit",["think","code","innovate"],"","","≈$0.08/jwb"],
       // ---- model gambar (tag "image") ----
       ["black-forest-labs/flux.2-klein-4b","FLUX.2 Klein 4B — tercepat & termurah",["image"],"BUAT GAMBAR BARU (hemat)","~2-5 dtk","≈$0.014/MP"],
       ["bytedance-seed/seedream-5-0-lite","Seedream 5.0 Lite — cepat & hemat",["image"],"BUAT GAMBAR BARU (hemat)","~5-10 dtk","≈$0.035"],
@@ -996,11 +1002,13 @@ const PROVIDERS={
     label:"OpenAI",
     keyUrl:"https://platform.openai.com/api-keys",
     models:[
-      ["gpt-5.6","GPT-5.6 — flagship terbaru: penalaran & koding terkuat",["think","code","innovate"]],
-      ["gpt-5.5","GPT-5.5 — sangat kuat untuk tugas profesional",["think","code","write"]],
-      ["gpt-5.4","GPT-5.4 — serbaguna, knowledge work & analisis",["chat","write","innovate"]],
-      ["gpt-5.4-mini","GPT-5.4 mini — cepat & hemat untuk chat harian",["chat"]],
-      ["gpt-5.4-nano","GPT-5.4 nano — termurah, tanya-jawab ringan",["chat"]],
+      ["gpt-5.4-nano","GPT-5.4 nano — termurah, tanya-jawab ringan",["chat"],"","","≈$0.0005/jwb"],
+      ["gpt-5-mini","GPT-5 mini — generasi lama hemat, chat ringan",["chat"],"","","≈$0.002/jwb"],
+      ["gpt-5.4-mini","GPT-5.4 mini — cepat & hemat untuk chat harian",["chat"],"","","≈$0.002/jwb"],
+      ["gpt-5","GPT-5 — generasi lama serbaguna, hemat utk analisis",["chat","code","write"],"","","≈$0.01/jwb"],
+      ["gpt-5.4","GPT-5.4 — serbaguna, knowledge work & analisis",["chat","write","innovate"],"","","≈$0.012/jwb"],
+      ["gpt-5.5","GPT-5.5 — sangat kuat untuk tugas profesional",["think","code","write"],"","","≈$0.015/jwb"],
+      ["gpt-5.6","GPT-5.6 — flagship terbaru: penalaran & koding terkuat",["think","code","innovate"],"","","≈$0.02/jwb"],
       // ---- model gambar ----
       ["gpt-image-2","GPT Image 2 — model gambar terbaru OpenAI",["image"],"BUAT GAMBAR BARU","~15-30 dtk","≈$0.17"],
       ["gpt-image-1","GPT Image 1 — generasi pertama, teruji & stabil",["image"],"BUAT GAMBAR BARU","~15-30 dtk","≈$0.04"],
@@ -1015,9 +1023,10 @@ const PROVIDERS={
     label:"Groq",
     keyUrl:"https://console.groq.com/keys",
     models:[
-      ["openai/gpt-oss-120b","GPT-OSS 120B — penalaran terbaik di Groq: koding & analisis",["think","code","innovate"]],
-      ["qwen/qwen3.6-27b","Qwen 3.6 27B — terpintar di Groq: tugas umum & tulisan",["chat","write","innovate"]],
-      ["openai/gpt-oss-20b","GPT-OSS 20B — terngebut, respon instan chat ringan",["chat"]]
+      ["openai/gpt-oss-20b","GPT-OSS 20B — terngebut, respon instan chat ringan",["chat"],"","","≈$0.0003/jwb"],
+      ["llama-3.3-70b-versatile","Llama 3.3 70B — andalan lama, serbaguna & murah",["chat","write"],"","","≈$0.0008/jwb"],
+      ["qwen/qwen3.6-27b","Qwen 3.6 27B — terpintar di Groq: tugas umum & tulisan",["chat","write","innovate"],"","","≈$0.0008/jwb"],
+      ["openai/gpt-oss-120b","GPT-OSS 120B — penalaran terbaik di Groq: koding & analisis",["think","code","innovate"],"","","≈$0.001/jwb"]
     ]
   }
 };
@@ -1035,10 +1044,21 @@ function fillModels(){
 }
 // pemilih model teks per mode
 // Satu daftar model untuk mode apa pun (teks / gambar / upscale)
+function priceNum(s){const m=(s||"").match(/\$([\d.]+)/);return m?parseFloat(m[1]):Infinity;}
+function sortByPrice(list){ // urut TERMURAH -> TERMAHAL; grup diurut berdasar harga termurah di dalamnya
+  const gmin={};
+  for(const m of list){const g=m.grup||"";const p=priceNum(m.price);
+    if(!(g in gmin)||p<gmin[g])gmin[g]=p;}
+  return list.slice().sort((a,b)=>{
+    const ga=a.grup||"",gb=b.grup||"";
+    if(ga!==gb)return (gmin[ga]-gmin[gb])||ga.localeCompare(gb);
+    return priceNum(a.price)-priceNum(b.price);
+  });
+}
 function currentModelList(){
   if(MODE==="upscale")
-    return UPSCALE_MODELS.map(u=>({id:u.id,label:u.label,grup:u.grup,time:u.time,price:u.price,ref:u}));
-  return modelsFor(PROVIDER,MODE).map(m=>({id:m[0],label:m[1],grup:m[3]||"",time:m[4]||"",price:m[5]||"",ref:m}));
+    return sortByPrice(UPSCALE_MODELS.map(u=>({id:u.id,label:u.label,grup:u.grup,time:u.time,price:u.price,ref:u})));
+  return sortByPrice(modelsFor(PROVIDER,MODE).map(m=>({id:m[0],label:m[1],grup:m[3]||"",time:m[4]||"",price:m[5]||"",ref:m})));
 }
 function fillModelBar(){
   const sel=$("textmodel"); if(!sel)return;
@@ -2724,7 +2744,7 @@ async function sendMsg(){
     else {
       if(currentId===targetChatId) history.push({role:"model",text:full,imgs:null});
       recordMessage("model",full,targetChatId);
-      logUsage("chat",MODEL,0);
+      logUsage("chat",MODEL,priceOf(MODEL));
       if(currentId===targetChatId){
         if(document.body.contains(aiDiv)){decorate(aiDiv,full,{ts:Date.now(),prompt:userText});}
         else openChat(targetChatId);   // pengguna sempat pergi lalu kembali: muat ulang isi chat
