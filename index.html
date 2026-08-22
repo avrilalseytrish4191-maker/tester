@@ -294,6 +294,25 @@ body::after{
 .strow.sthead{font:10.5px var(--mono);color:var(--faint);letter-spacing:1.5px;text-transform:uppercase;border-bottom:1px solid var(--line2)}
 .strow.sttotal{font-weight:700;color:var(--gold2);border-bottom:none;border-top:1px solid var(--line2)}
 .strow.off{opacity:.45}
+/* ===== Sesi Aktif ===== */
+.sesuser{border:1px solid var(--linegray);border-radius:13px;padding:11px 13px;margin-bottom:10px;background:var(--field)}
+.seshead{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.seshead b{color:var(--gold2)}
+.sesbadge{font:10.5px var(--mono);color:var(--faint);border:1px solid var(--linegray);
+  border-radius:999px;padding:3px 10px;letter-spacing:.5px}
+.sesbadge.on{color:#a3e635;border-color:rgba(163,230,53,.4);background:rgba(163,230,53,.06)}
+.seslast{font:10.5px var(--mono);color:var(--faint)}
+.sesrow{display:grid;grid-template-columns:22px 1.2fr 1fr .8fr auto auto;gap:8px;align-items:center;
+  padding:7px 4px;border-top:1px dashed var(--linegray);font-size:12.5px}
+.sesrow.on .sdev{color:var(--text)}
+.sdev{color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sip{font:11.5px var(--mono);color:var(--gold)}
+.stime{font:11px var(--mono);color:var(--faint)}
+.sesbanned{margin-top:14px;padding-top:12px;border-top:1px solid var(--linegray);
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.banchip{display:inline-flex;align-items:center;gap:6px;font:11.5px var(--mono);color:var(--danger);
+  background:rgba(217,83,106,.08);border:1px solid rgba(217,83,106,.35);border-radius:999px;padding:4px 10px}
+.banchip .sunban{background:none;border:none;color:var(--danger);cursor:pointer;font-size:12px;padding:0}
 .adkeys{margin-top:10px;padding-top:10px;border-top:1px dashed var(--linegray)}
 .adkl{display:block;font:10.5px var(--mono);color:var(--faint);letter-spacing:1px;margin-bottom:7px}
 .kprow{display:flex;align-items:center;gap:8px;margin-bottom:6px}
@@ -1154,10 +1173,25 @@ function HB(){ // alamat dasar worker (tanpa / di ujung); null bila belum dikonf
   const h=CONFIG.HISTORY_URL||"";
   return (h && !h.startsWith("__"))?h.replace(/\/+$/,""):null;
 }
+function devId(){ // identitas perangkat: menetap di localStorage bila tersedia
+  try{
+    let d=localStorage.getItem("pg_dev");
+    if(!d){d=Math.random().toString(36).slice(2,10)+Date.now().toString(36);localStorage.setItem("pg_dev",d);}
+    return d;
+  }catch(_){ if(!window.__pgdev)window.__pgdev=Math.random().toString(36).slice(2,12); return window.__pgdev; }
+}
+function devInfo(){
+  const ua=navigator.userAgent||"";
+  const os=/Windows/i.test(ua)?"Windows":/Mac/i.test(ua)?"macOS":/Linux/i.test(ua)?"Linux":"OS?";
+  const en=/Edg\//.test(ua)?"WebView2":/Safari/i.test(ua)&&!/Chrome/i.test(ua)?"WebKit":"Chromium";
+  return os+" · "+en;
+}
 async function acctApi(path,opts){
   const o=Object.assign({headers:{}},opts||{});
   o.headers["Content-Type"]="application/json";
   if(ME&&ME.token)o.headers["X-Auth"]=ME.token;
+  o.headers["X-Dev"]=devId();
+  o.headers["X-DevInfo"]=devInfo();
   const r=await fetch(HB()+path,o);
   return await r.json();
 }
@@ -2806,7 +2840,8 @@ async function tryLogin(){
     }
     if(d&&d.ok){
       ME={u:d.u,role:d.role,perms:d.perms,keys:d.keys||null,provOn:d.provOn||null,token:d.token};
-    }else if(d){ $("lockerr").textContent=d.error||"User ID atau password salah";$("loginPass").value="";return; }
+    }else if(d&&d.banned){ $("lockerr").textContent="⛔ IP kamu diblokir admin.";return; }
+    else if(d){ $("lockerr").textContent=d.error||"User ID atau password salah";$("loginPass").value="";return; }
     // d===null → worker belum di-upgrade / offline → jatuh ke daftar lokal di bawah
   }
   if(!ME){ // ---- fallback: daftar USERS lama di dalam aplikasi ----
@@ -2836,6 +2871,13 @@ setInterval(async()=>{
   if(!ME||!ME.token||!HB())return;
   try{
     const d=await acctApi("/me",{method:"GET"});
+    if(d&&(d.kicked||d.banned)){ // ditendang admin / IP diblokir → keluar paksa
+      ME=null;API_KEY="";
+      $("lock").style.display="flex";
+      $("lockerr").textContent=d.banned?"⛔ IP kamu diblokir admin.":"⛔ Sesi kamu dihentikan oleh admin.";
+      $("loginPass").value="";
+      return;
+    }
     if(!d||!d.ok)return;
     const before=JSON.stringify([ME.keys,ME.provOn,ME.perms]);
     ME.keys=d.keys||{}; ME.provOn=d.provOn||{}; ME.perms=d.perms;
@@ -2860,6 +2902,7 @@ function openAdmin(){
     <h3>👑 Panel Admin</h3>
     <div class="adtabs">
       <button class="adtab active" data-t="akun">Akun</button>
+      <button class="adtab" data-t="sesi">Sesi Aktif</button>
       <button class="adtab" data-t="stat">Statistik</button>
     </div>
     <div class="adbody" id="adbody">Memuat…</div>
@@ -2869,7 +2912,7 @@ function openAdmin(){
   ov.querySelectorAll(".adtab").forEach(b=>b.onclick=()=>{
     ov.querySelectorAll(".adtab").forEach(x=>x.classList.remove("active"));
     b.classList.add("active");
-    b.dataset.t==="akun"?adUsers(ov):adStats(ov,7);
+    b.dataset.t==="akun"?adUsers(ov):b.dataset.t==="sesi"?adSess(ov):adStats(ov,7);
   });
   adUsers(ov);
 }
@@ -2941,6 +2984,49 @@ async function adUsers(ov){
       role:box.querySelector("#nuR").value,perms:ALL_MODES})});
     r.error?note("⚠ "+r.error):adUsers(ov);
   };
+}
+async function adSess(ov){
+  const box=ov.querySelector("#adbody");box.innerHTML="Memuat sesi…";
+  let d;try{d=await acctApi("/sessions",{method:"GET"});}catch(e){box.innerHTML="⚠ "+esc(e.message);return}
+  if(d.error){box.innerHTML="⚠ "+esc(d.error);return}
+  let out="";
+  for(const u of d.users){
+    const on=u.online;
+    const head=`<div class="seshead"><b>${esc(u.u)}${u.role==="admin"?" 👑":""}</b>`
+      +(on?`<span class="sesbadge on">🟢 ${on} online</span>`:`<span class="sesbadge">⚪ offline</span>`)
+      +(!on&&u.sessions.length?`<span class="seslast">terakhir ${ago(u.sessions[0].last)}</span>`:"")
+      +`</div>`;
+    let rows="";
+    for(const s of u.sessions){
+      rows+=`<div class="sesrow${s.online&&!s.kicked?" on":""}">
+        <span class="sdot">${s.kicked?"⛔":(s.online?"🟢":"⚪")}</span>
+        <span class="sdev">${esc(s.label)}</span>
+        <span class="sip">${esc(s.ip)}</span>
+        <span class="stime">${s.kicked?"menunggu keluar":ago(s.last)}</span>
+        <button class="tbtn skick" data-u="${esc(u.u)}" data-d="${esc(s.dev)}" ${s.kicked?"disabled":""}>⛔ Tendang</button>
+        <button class="tbtn sban" data-ip="${esc(s.ip)}" style="color:var(--danger)">🚫 Blokir IP</button>
+      </div>`;
+    }
+    out+=`<div class="sesuser">${head}${rows||'<div class="projempty">Belum pernah login sejak fitur sesi aktif.</div>'}</div>`;
+  }
+  out+=`<div class="sesbanned"><span class="adkl">🚫 IP terblokir:</span>`
+    +(d.banned.length?d.banned.map(ip=>`<span class="banchip">${esc(ip)}<button class="sunban" data-ip="${esc(ip)}" title="Buka blokir">✕</button></span>`).join("")
+      :`<span class="projempty" style="padding:0">tidak ada</span>`)
+    +`</div><div class="adnote">Perangkat yang ditendang/diblokir keluar otomatis dalam ≤30 detik (saat denyut berikutnya).</div>`;
+  box.innerHTML=out;
+  box.querySelectorAll(".skick").forEach(b=>b.onclick=async()=>{
+    await acctApi("/sessions/kick",{method:"POST",body:JSON.stringify({u:b.dataset.u,dev:b.dataset.d})});
+    adSess(ov);
+  });
+  box.querySelectorAll(".sban").forEach(b=>b.onclick=async()=>{
+    if(!confirm("Blokir IP "+b.dataset.ip+"? SEMUA perangkat dari IP ini akan ditolak."))return;
+    await acctApi("/sessions/ban",{method:"POST",body:JSON.stringify({ip:b.dataset.ip})});
+    adSess(ov);
+  });
+  box.querySelectorAll(".sunban").forEach(b=>b.onclick=async()=>{
+    await acctApi("/sessions/ban",{method:"POST",body:JSON.stringify({ip:b.dataset.ip,un:true})});
+    adSess(ov);
+  });
 }
 async function adStats(ov,days){
   const box=ov.querySelector("#adbody");
