@@ -294,6 +294,16 @@ body::after{
 .strow.sthead{font:10.5px var(--mono);color:var(--faint);letter-spacing:1.5px;text-transform:uppercase;border-bottom:1px solid var(--line2)}
 .strow.sttotal{font-weight:700;color:var(--gold2);border-bottom:none;border-top:1px solid var(--line2)}
 .strow.off{opacity:.45}
+.adkeys{margin-top:10px;padding-top:10px;border-top:1px dashed var(--linegray)}
+.adkl{display:block;font:10.5px var(--mono);color:var(--faint);letter-spacing:1px;margin-bottom:7px}
+.kprow{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.kprow .kpon{min-width:110px}
+.kprow .kpkey{flex:1;background:var(--raise);border:1px solid var(--linegray);color:var(--text);
+  border-radius:9px;padding:6px 10px;font:12px var(--mono)}
+.kprow .kpkey:focus{outline:none;border-color:var(--gold)}
+.kprow .kpeye{background:none;border:1px solid var(--linegray);color:var(--dim);border-radius:8px;
+  width:30px;height:30px;cursor:pointer;transition:.15s}
+.kprow .kpeye:hover{color:var(--gold2);border-color:var(--line2)}
 /* ===== Kunci saat gagal sinkron ===== */
 .synclock{position:fixed;inset:0;z-index:49;display:none;align-items:center;justify-content:center;
   background:rgba(4,4,5,.82);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
@@ -846,6 +856,36 @@ const CONFIG={
 function sha256(ascii){function rr(v,a){return(v>>>a)|(v<<(32-a))}var mL=ascii.length*8,r="",words=[],aB,i,j,h=[],k=[],pC=0,isC={},c=2;for(;pC<64;c++){if(!isC[c]){for(i=0;i<313;i+=c)isC[i]=c;h[pC]=(Math.pow(c,.5)*4294967296)|0;k[pC++]=(Math.pow(c,1/3)*4294967296)|0}}ascii+="\x80";while(ascii.length%64-56)ascii+="\x00";for(i=0;i<ascii.length;i++){j=ascii.charCodeAt(i);if(j>>8)return"";words[i>>2]|=j<<((3-i)%4)*8}words[words.length]=(mL/4294967296)|0;words[words.length]=mL;for(j=0;j<words.length;){var w=words.slice(j,j+=16),oH=h;h=h.slice(0,8);for(i=0;i<64;i++){var w15=w[i-15],w2=w[i-2],a=h[0],e=h[4],t1=h[7]+(rr(e,6)^rr(e,11)^rr(e,25))+((e&h[5])^(~e&h[6]))+k[i]+(w[i]=(i<16)?w[i]:(w[i-16]+(rr(w15,7)^rr(w15,18)^(w15>>>3))+w[i-7]+(rr(w2,17)^rr(w2,19)^(w2>>>10)))|0),t2=(rr(a,2)^rr(a,13)^rr(a,22))+((a&h[1])^(a&h[2])^(h[1]&h[2]));h=[(t1+t2)|0].concat(h);h[4]=(h[4]+t1)|0}for(i=0;i<8;i++)h[i]=(h[i]+oH[i])|0}for(i=0;i<8;i++)for(j=3;j+1;j--){var b=(h[i]>>(j*8))&255;r+=((b>>4).toString(16))+((b&15).toString(16))}return r}
 
 function builtinKey(p){const k=CONFIG.KEYS[p];return (k && !k.startsWith("__"))?k:""}
+/* ---- mode akun-server: key milik akun + saklar admin (menimpa key tertanam) ---- */
+function serverKeys(){return !!(ME&&ME.keys);}
+function provAllowed(p){ // boleh dipakai bila diaktifkan admin DAN ada key
+  if(!serverKeys())return !!builtinKey(p);
+  return (ME.provOn&&p in ME.provOn?ME.provOn[p]!==false:true) && !!((ME.keys[p]||"").trim());
+}
+function keyFor(p){
+  if(serverKeys())return provAllowed(p)?(ME.keys[p]||"").trim():"";
+  return builtinKey(p);
+}
+function provStatusLabel(p){
+  if(!serverKeys())return "";
+  if(ME.provOn&&ME.provOn[p]===false)return " — ✖ ditutup admin";
+  if(!((ME.keys[p]||"").trim()))return " — ⚠ belum ada key";
+  return " — ✓ aktif";
+}
+function refreshProviderSelect(){ // beri label status & kunci opsi yang tak boleh dipakai
+  if(!serverKeys())return;
+  [...$("provider").options].forEach(o=>{
+    o.textContent=o.textContent.replace(/ — (✓ aktif|✖ ditutup admin|⚠ belum ada key)$/,"")+provStatusLabel(o.value);
+    o.disabled=!provAllowed(o.value);
+  });
+  // sembunyikan kolom key manual (key diatur admin, tidak boleh terlihat)
+  $("apikey").style.display="none";
+  $("connectBtn").style.display="none";
+  const ada=["openrouter","openai","gemini","groq"].some(provAllowed);
+  $("provhint").textContent=ada
+    ?"Key diatur oleh admin dan tidak ditampilkan. Pilih penyedia yang aktif (✓)."
+    :"Belum ada penyedia aktif untuk akunmu — hubungi admin untuk mengisi key / membuka akses.";
+}
 const hasBuiltin = ["gemini","openrouter","openai","groq"].some(p=>builtinKey(p));
 function builtinWorker(){const w=CONFIG.WORKER_URL;return (w && !w.startsWith("__"))?w.replace(/\/$/,""):""}
 
@@ -1042,9 +1082,10 @@ $("textmodel").onchange=e=>{
 };
 $("provider").onchange=e=>{
   const p=e.target.value;
-  if(builtinKey(p)) activateProvider(p,null);
+  if(keyFor(p)) activateProvider(p,null);
   else {PROVIDER=p;fillModels();$("apikey").value="";API_KEY="";
-    $("dot").classList.remove("on");$("modelLabel").textContent="butuh key";
+    $("dot").classList.remove("on");
+    $("modelLabel").textContent=serverKeys()?(ME.provOn&&ME.provOn[p]===false?"ditutup admin":"belum ada key"):"butuh key";
     $("modelbar").classList.remove("show");$("send").disabled=true;}
 };
 fillModels();
@@ -2539,6 +2580,7 @@ async function sendMsg(){
   if($("synclock").classList.contains("show"))return; // terkunci: tunggu koneksi pulih
   if(VIEW_ALL){addMsg("ai",tagHtml()+"👑 Mode pantau bersifat baca saja. Matikan \"Semua akun\" di sidebar untuk mengirim pesan.").classList.add("err");return;}
   if(!canUse(MODE)){addMsg("ai",tagHtml()+"🔒 Akun kamu tidak memiliki akses ke fitur ini. Hubungi admin.").classList.add("err");return;}
+  if(serverKeys()&&!provAllowed(PROVIDER)){addMsg("ai",tagHtml()+"🔒 Penyedia ini ditutup admin atau key-nya belum diisi untuk akunmu.").classList.add("err");return;}
   if(chatBusy(currentId))return;   // chat INI sedang proses — chat lain tetap bebas
   const text=ta.value.trim();
   if(!text && pendingFiles.length===0)return;   // butuh teks ATAU lampiran
@@ -2702,10 +2744,10 @@ async function sendMsg(){
 /* ---- aktifkan penyedia dengan key tertanam yang cocok ---- */
 function activateProvider(p, model){
   PROVIDER=p; $("provider").value=p; fillModels();
-  API_KEY=builtinKey(p)||$("apikey").value.trim();
+  API_KEY=keyFor(p)||(serverKeys()?"":$("apikey").value.trim());
   const list=modelsFor(p,MODE==="image"?"chat":MODE);
   MODEL=model||(list.length?list[0][0]:"");
-  $("apikey").value=API_KEY;
+  if(!serverKeys())$("apikey").value=API_KEY;   // mode server: key TIDAK pernah tampil
   if(API_KEY){
     $("dot").classList.add("on");
     $("modelLabel").textContent=PROVIDERS[p].label;
@@ -2733,7 +2775,7 @@ async function tryLogin(){
       try{ d=await acctApi("/setup",{method:"POST",body:JSON.stringify({u,p})}); }catch(_){d=null}
     }
     if(d&&d.ok){
-      ME={u:d.u,role:d.role,perms:d.perms,token:d.token};
+      ME={u:d.u,role:d.role,perms:d.perms,keys:d.keys||null,provOn:d.provOn||null,token:d.token};
     }else if(d){ $("lockerr").textContent=d.error||"User ID atau password salah";$("loginPass").value="";return; }
     // d===null → worker belum di-upgrade / offline → jatuh ke daftar lokal di bawah
   }
@@ -2744,9 +2786,14 @@ async function tryLogin(){
   $("lock").style.display="none";
   meName=(u||"anggota");
   applyPerms();
-  if(hasBuiltin){
-    if(builtinWorker()){WORKER_URL=builtinWorker(); $("workerurl").value=WORKER_URL;}
-    if(HISTORY_URL) loadChats();
+  if(builtinWorker()){WORKER_URL=builtinWorker(); $("workerurl").value=WORKER_URL;}
+  if(HISTORY_URL) loadChats();
+  if(serverKeys()){ // key per-akun dari server (key tertanam diabaikan)
+    refreshProviderSelect();
+    const p=["openrouter","openai","gemini","groq"].find(provAllowed);
+    if(p)activateProvider(p,null);
+    else{$("keypanel").classList.remove("hide");$("send").disabled=true;}
+  }else if(hasBuiltin){
     let p=CONFIG.DEFAULT_PROVIDER;
     if(p.startsWith("__")||!builtinKey(p))
       p=["openrouter","openai","gemini","groq"].find(x=>builtinKey(x));
@@ -2754,6 +2801,25 @@ async function tryLogin(){
   }
   $("input").focus();
 }
+/* ---- penyegaran langsung: admin isi key / buka-tutup provider → berlaku tanpa login ulang ---- */
+setInterval(async()=>{
+  if(!ME||!ME.token||!HB())return;
+  try{
+    const d=await acctApi("/me",{method:"GET"});
+    if(!d||!d.ok)return;
+    const before=JSON.stringify([ME.keys,ME.provOn,ME.perms]);
+    ME.keys=d.keys||{}; ME.provOn=d.provOn||{}; ME.perms=d.perms;
+    if(JSON.stringify([ME.keys,ME.provOn,ME.perms])!==before){
+      applyPerms(); refreshProviderSelect();
+      if(!provAllowed(PROVIDER)){ // provider yang sedang dipakai ditutup admin
+        const p=["openrouter","openai","gemini","groq"].find(provAllowed);
+        if(p)activateProvider(p,null);
+        else{API_KEY="";$("dot").classList.remove("on");$("send").disabled=true;
+          $("keypanel").classList.remove("hide");$("modelbar").classList.remove("show");}
+      }else if(!API_KEY&&provAllowed(PROVIDER)){activateProvider(PROVIDER,null);}
+    }
+  }catch(_){}
+},30000);
 /* ================= PANEL ADMIN ================= */
 const MODE_LABELS={chat:"💬 Ngobrol",think:"🧠 Berpikir",innovate:"💡 Inovasi",image:"🎨 Gambar",upscale:"🔍 Upscale",code:"⌨ Kode",write:"✍ Penulis"};
 function openAdmin(){
@@ -2781,9 +2847,19 @@ async function adUsers(ov){
   const box=ov.querySelector("#adbody");box.innerHTML="Memuat akun…";
   let d;try{d=await acctApi("/users",{method:"GET"});}catch(e){box.innerHTML="⚠ "+esc(e.message);return}
   if(d.error){box.innerHTML="⚠ "+esc(d.error);return}
+  const PROVL={openrouter:"OpenRouter",openai:"OpenAI",gemini:"Gemini",groq:"Groq"};
   let rows="";
   for(const u of d.users){
     const cks=ALL_MODES.map(m=>`<label class="pm"><input type="checkbox" data-m="${m}" ${u.perms.includes(m)?"checked":""}>${MODE_LABELS[m]}</label>`).join("");
+    const provs=Object.keys(PROVL).map(p=>{
+      const on=!(u.provOn&&u.provOn[p]===false);
+      const k=(u.keys&&u.keys[p])||"";
+      return `<div class="kprow" data-p="${p}">
+        <label class="pm kpon"><input type="checkbox" class="kpsw" ${on?"checked":""}>${PROVL[p]}</label>
+        <input class="kpkey" type="password" value="${esc(k)}" placeholder="${k?"":"key belum diisi"}" autocomplete="off">
+        <button class="kpeye" title="Lihat/sembunyikan key">👁</button>
+      </div>`;
+    }).join("");
     rows+=`<div class="adrow" data-u="${esc(u.u)}">
       <div class="adtop">
         <b>${esc(u.u)}</b>
@@ -2794,6 +2870,7 @@ async function adUsers(ov){
         <button class="tbtn addel" style="color:var(--danger)">🗑</button>
       </div>
       <div class="adperms">${cks}</div>
+      <div class="adkeys"><span class="adkl">🔑 Key per penyedia (hanya terlihat di sini):</span>${provs}</div>
     </div>`;
   }
   box.innerHTML=`<div class="adlist">${rows||"Belum ada akun."}</div>
@@ -2808,11 +2885,20 @@ async function adUsers(ov){
     row.querySelector(".adsave").onclick=async()=>{
       const b={u:row.dataset.u,role:row.querySelector(".adrole").value,
         active:row.querySelector(".adactive").checked,
-        perms:[...row.querySelectorAll(".adperms input:checked")].map(x=>x.dataset.m)};
+        perms:[...row.querySelectorAll(".adperms input:checked")].map(x=>x.dataset.m),
+        keys:{},provOn:{}};
+      row.querySelectorAll(".kprow").forEach(kr=>{
+        b.keys[kr.dataset.p]=kr.querySelector(".kpkey").value.trim();
+        b.provOn[kr.dataset.p]=kr.querySelector(".kpsw").checked;
+      });
       const p=row.querySelector(".adpass").value; if(p)b.p=p;
       const r=await acctApi("/users",{method:"POST",body:JSON.stringify(b)});
       note(r.error?("⚠ "+r.error):("✓ "+row.dataset.u+" tersimpan"));
     };
+    row.querySelectorAll(".kpeye").forEach(b=>b.onclick=()=>{
+      const inp=b.parentElement.querySelector(".kpkey");
+      inp.type=inp.type==="password"?"text":"password";
+    });
     row.querySelector(".addel").onclick=async()=>{
       if(!confirm("Hapus akun \""+row.dataset.u+"\"?"))return;
       const r=await acctApi("/users?u="+encodeURIComponent(row.dataset.u),{method:"DELETE"});
