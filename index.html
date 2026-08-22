@@ -1166,6 +1166,9 @@ function ago(ts){
 let meName = "anggota";   // nama pembuat (dari user login)
 let VIEW_ALL=false;        // mode pantau admin: lihat chat SEMUA akun (baca saja)
 let deletedIds=[];         // id chat yang dihapus di perangkat ini (nisan utk sinkron)
+let projectsMt=0;          // kapan daftar proyek terakhir DIUBAH di perangkat ini
+let _saving=false;         // true selama POST simpan sedang terbang
+function touchProjects(){projectsMt=Date.now();}
 function touch(c){if(c)c.mt=Date.now();} // stempel "baru diubah" agar menang saat digabung
 let ME=null;               // {u,role,perms,token} dari server akun (null = mode lokal lama)
 const ALL_MODES=["chat","think","innovate","image","upscale","code","write"];
@@ -1258,7 +1261,7 @@ let _syncBusy=false;
 function mtOf(c){return (c&&(c.mt||c.ts))||0;}
 async function pollSync(){
   if(_syncBusy||!HB()||!ME||!ME.token)return;
-  if(saveTimer)return;                       // ada perubahan lokal menunggu disimpan — lewati dulu
+  if(saveTimer||_saving)return;              // ada perubahan lokal menunggu / sedang dikirim — lewati dulu
   _syncBusy=true;
   try{
     const h={"X-Auth":ME.token};
@@ -1285,7 +1288,13 @@ async function pollSync(){
       if(butuhSimpan)saveChats(); // ada yang tercecer → dorong ke server sekarang
       const openBefore=currentId?JSON.stringify((chats.find(x=>x.id===currentId)||{}).messages||[]).length:0;
       chats=merged.filter(c=>!deletedIds.includes(c.id));
-      if(!VIEW_ALL && Array.isArray(d.projects)){projects=d.projects;normProjects();}
+      if(!VIEW_ALL && Array.isArray(d.projects)){
+        if(lastSaveOK>=projectsMt){            // perubahan proyek lokal sudah pernah tersimpan → aman ikut server
+          projects=d.projects;normProjects();
+        }else{                                 // proyek lokal lebih baru & belum tersimpan → pertahankan, dorong ke server
+          saveChats();
+        }
+      }
       const cur=currentId?chats.find(x=>x.id===currentId):null;
       const openAfter=cur?JSON.stringify(cur.messages||[]).length:0;
       renderChatList();
@@ -1369,6 +1378,7 @@ function saveChats(){
     saveTimer=null; // PENTING: nol-kan agar mesin sinkron tidak terkunci selamanya
     if(VIEW_ALL)return; // mode pantau = baca saja, jangan menimpa milik siapa pun
     if(!HISTORY_URL){localStorage_setItem(JSON.stringify(chats));return;}
+    _saving=true;
     try{
       const r=await fetch(HISTORY_URL,{method:"POST",headers:saveHeaders(),body:savePayload()});
       if(!r.ok){const t=await r.text().catch(()=>"");throw new Error("HTTP "+r.status+(t?" — "+t.slice(0,120):""));}
@@ -1379,6 +1389,7 @@ function saveChats(){
       markSyncFail(e);
       setTimeout(saveChats,4000); // coba lagi otomatis sampai berhasil
     }
+    _saving=false;
   },600);
 }
 /* simpan PAKSA saat aplikasi ditutup / disembunyikan — jangan tunggu debounce */
@@ -1584,7 +1595,7 @@ function projectDialog(judul,data,cb){
 function createProject(){
   projectDialog("Proyek baru",{},(name,desc)=>{
     if(projByName(name)){alert("Proyek \""+name+"\" sudah ada.");return;}
-    projects.push({name,desc}); projOpen[name]=true;
+    projects.push({name,desc}); projOpen[name]=true; touchProjects();
     saveChats(); showProjectHome(name);
   });
 }
@@ -1643,19 +1654,19 @@ function openProjectMenu(anchor,p){
         if(activeProject===p.name)activeProject=nn;
         p.name=nn;
       }
-      p.desc=desc;
+      p.desc=desc; touchProjects();
       saveChats();renderChatList();
       if(activeProject===p.name && !currentId) showProjectHome(p.name);
     });
   };
   m.querySelector(".par").onclick=()=>{
-    p.archived=!p.archived;
+    p.archived=!p.archived; touchProjects();
     saveChats();renderChatList();m.remove();
   };
   m.querySelector(".pout").onclick=()=>{
     if(confirm("Bubarkan proyek \""+p.name+"\"? Chat di dalamnya TIDAK dihapus, hanya dikeluarkan ke daftar biasa.")){
-      chats.forEach(c=>{if(c.project===p.name)delete c.project;});
-      projects=projects.filter(x=>x!==p);
+      chats.forEach(c=>{if(c.project===p.name){delete c.project;touch(c);}});
+      projects=projects.filter(x=>x!==p); touchProjects();
       if(activeProject===p.name){activeProject=null;newChat();}
       saveChats();renderChatList();
     }
@@ -1667,7 +1678,7 @@ function openProjectMenu(anchor,p){
       const ids=new Set(chats.filter(c=>c.project===p.name).map(c=>c.id));
       deletedIds.push(...ids);
       chats=chats.filter(c=>!ids.has(c.id));
-      projects=projects.filter(x=>x!==p);
+      projects=projects.filter(x=>x!==p); touchProjects();
       if(ids.has(currentId)||activeProject===p.name){activeProject=null;newChat();}
       saveChats();renderChatList();
     }
@@ -1741,8 +1752,8 @@ function openMenu(anchor,c){
     m.querySelector(".mnew").onclick=()=>{
       m.remove();
       projectDialog("Proyek baru",{},(name,desc)=>{
-        if(!projByName(name))projects.push({name,desc});
-        c.project=name; projOpen[name]=true;
+        if(!projByName(name)){projects.push({name,desc});touchProjects();}
+        c.project=name; touch(c); projOpen[name]=true;
         saveChats();renderChatList();
       });
     };
@@ -2831,9 +2842,9 @@ async function tryLogin(){
   const u=$("loginUser").value.trim(), p=$("loginPass").value;
   if(HB()){ // ---- login via server akun (Worker) ----
     $("lockerr").textContent="memeriksa…";
-    let d=null;
+    let d=null, serverErr=false;
     try{ d=await acctApi("/login",{method:"POST",body:JSON.stringify({u,p})}); }
-    catch(_){ }
+    catch(_){ serverErr=true; }
     if(d&&d.setup){ // belum ada akun sama sekali → login pertama menjadi ADMIN
       if(!p||p.length<6){$("lockerr").textContent="Buat akun admin pertama: password min 6 karakter";return}
       try{ d=await acctApi("/setup",{method:"POST",body:JSON.stringify({u,p})}); }catch(_){d=null}
@@ -2846,7 +2857,12 @@ async function tryLogin(){
   }
   if(!ME){ // ---- fallback: daftar USERS lama di dalam aplikasi ----
     const ok=CONFIG.USERS.some(x=>x.u===u && x.h===sha256(p));
-    if(!ok){$("lockerr").textContent="User ID atau password salah";$("loginPass").value="";return}
+    if(!ok){
+      $("lockerr").textContent=serverErr
+        ?"⚠ Server akun tidak terjangkau — cek koneksi internet / worker Cloudflare, lalu coba lagi."
+        :"User ID atau password salah";
+      $("loginPass").value="";return;
+    }
   }
   $("lock").style.display="none";
   meName=(u||"anggota");
@@ -2998,12 +3014,12 @@ async function adSess(ov){
       +`</div>`;
     let rows="";
     for(const s of u.sessions){
-      rows+=`<div class="sesrow${s.online&&!s.kicked?" on":""}">
-        <span class="sdot">${s.kicked?"⛔":(s.online?"🟢":"⚪")}</span>
+      rows+=`<div class="sesrow${s.online?" on":""}">
+        <span class="sdot">${s.online?"🟢":"⚪"}</span>
         <span class="sdev">${esc(s.label)}</span>
         <span class="sip">${esc(s.ip)}</span>
-        <span class="stime">${s.kicked?"menunggu keluar":ago(s.last)}</span>
-        <button class="tbtn skick" data-u="${esc(u.u)}" data-d="${esc(s.dev)}" ${s.kicked?"disabled":""}>⛔ Tendang</button>
+        <span class="stime">${ago(s.last)}</span>
+        <button class="tbtn skick" data-u="${esc(u.u)}" data-d="${esc(s.dev)}" title="Hapus riwayat sesi ini; bila perangkatnya sedang online, langsung ditendang keluar">🗑 Hapus</button>
         <button class="tbtn sban" data-ip="${esc(s.ip)}" style="color:var(--danger)">🚫 Blokir IP</button>
       </div>`;
     }
@@ -3015,6 +3031,7 @@ async function adSess(ov){
     +`</div><div class="adnote">Perangkat yang ditendang/diblokir keluar otomatis dalam ≤30 detik (saat denyut berikutnya).</div>`;
   box.innerHTML=out;
   box.querySelectorAll(".skick").forEach(b=>b.onclick=async()=>{
+    if(!confirm("Hapus sesi ini? Riwayatnya hilang, dan bila perangkatnya sedang online ia langsung ditendang keluar."))return;
     await acctApi("/sessions/kick",{method:"POST",body:JSON.stringify({u:b.dataset.u,dev:b.dataset.d})});
     adSess(ov);
   });
