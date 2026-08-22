@@ -342,6 +342,9 @@ header{display:flex;align-items:center;gap:12px;padding:16px 2px 12px;flex-shrin
 .status{margin-left:auto;display:flex;align-items:center;gap:9px;font:11.5px var(--mono);color:var(--dim);
   background:var(--field);border:1px solid var(--linegray);border-radius:999px;padding:7px 14px;
   box-shadow:var(--glass-hi)}
+.status.usertag{color:var(--gold2);font-weight:600;letter-spacing:1px;
+  background:linear-gradient(120deg,rgba(201,162,39,.12),rgba(138,109,47,.06));
+  border-color:var(--line2);max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dot{width:8px;height:8px;border-radius:50%;background:var(--danger);transition:background .3s;position:relative}
 .dot.on{background:var(--gold2);box-shadow:0 0 10px var(--gold2)}
 .dot.on::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:1px solid rgba(232,207,122,.55);
@@ -736,6 +739,7 @@ textarea::placeholder{color:var(--faint)}
   <header>
     <button class="sbopen" id="sbopen" title="Buka history">☰</button>
     <div class="logo"><b>PGBrain</b><span>multi ai core</span></div>
+    <div class="status usertag" id="userTag" style="display:none" title="Akun yang sedang login"></div>
     <div class="status"><span class="dot" id="dot"></span><span id="modelLabel">offline</span></div>
     <button class="gear" id="adminBtn" style="display:none">👑 Admin</button>
     <button class="gear" id="gearBtn">⚙ Kunci</button>
@@ -1148,6 +1152,12 @@ function applyPerms(){ // sembunyikan chip fitur yang tidak diizinkan utk akun i
     if(chip)chip.click();
   }
   if($("adminBtn"))$("adminBtn").style.display=(ME&&ME.role==="admin")?"":"none";
+  const tag=$("userTag");
+  if(tag){
+    const nama=(ME&&ME.u)||meName||"";
+    if(nama){tag.style.display="";tag.innerHTML=((ME&&ME.role==="admin")?"👑 ":"👤 ")+esc(nama);}
+    else tag.style.display="none";
+  }
 }
 function logUsage(kind,model,est){ // catat pemakaian — jalan di latar, tak mengganggu
   if(!ME||!ME.token||!HB())return;
